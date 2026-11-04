@@ -40,7 +40,7 @@ Richiesta esplicita di Rosario: il programma non deve mai segnalare cose inutili
   da Rosario, opzioni B e C). Niente risorse esterne, niente commenti di attribuzione nel codice.
 - `config/config.json` BankDomains, RecentDays, DnsCompare, Allow* (elementi autorizzati -> BASSA).
 - `Compile.ps1` produce `cyberrsecuritycheck.ps1` (ASCII puro, senza BOM, CRLF) + `.sha256`.
-- `tests/Test-CyberRSecurityCheck.ps1` 103 test, inclusa la simulazione `Get-Content | iex` del file unico.
+- `tests/Test-CyberRSecurityCheck.ps1` 107 test, inclusa la simulazione `Get-Content | iex` del file unico.
 
 ## Convenzioni
 - Compatibilita': Windows PowerShell 5.1 e PowerShell 7. Niente `??`, `?.`, ternario, `-Parallel`.
@@ -59,12 +59,13 @@ Richiesta esplicita di Rosario: il programma non deve mai segnalare cose inutili
 4. Per le release: tag `vX.Y.Z`, impronta SHA256 nelle note di rilascio; aggiornare `$script:Version` e CHANGELOG.md.
 
 ## Stato e prossimi passi
-- Finora testato solo su Linux con PowerShell 7 (pwsh): MAI eseguito su Windows reale. Primo compito:
-  su questo PC eseguire `.\Compile.ps1 -Test` con Windows PowerShell 5.1 E con pwsh, poi un'analisi
-  completa reale (GUI e `-Console`) come amministratore, e correggere cio' che non funziona su Windows
-  (CIM, registro, eventi, Add-Type del modulo memoria con csc di .NET Framework, clipboard STA, Edge --app,
-  HttpListener su localhost senza URL ACL).
-- Verificare i falsi positivi su un PC pulito: un PC sano deve risultare con 0 CONFERMATI.
+- Provato su Windows 11 reale (5 novembre 2026, PC di gioco con AtlasOS, senza Edge: la GUI usa Chrome --app):
+  test PASS con Windows PowerShell 5.1 e pwsh 7.6; analisi reale come amministratore da console e da GUI
+  (HttpListener, runspace STA, test appunti, modulo memoria) senza errori; 0 CONFERMATI su PC pulito.
+  `irm | iex` provato servendo il file da un server locale: riavvio come amministratore riuscito con i parametri.
+- Le righe "Errore fatale (Get-ItemProperty)" che compaiono in una trascrizione (Start-Transcript) sono errori
+  gia' gestiti dai try/catch: PowerShell li registra comunque nella trascrizione, ma non compaiono in console.
+- Nel lanciatore usare `return`, mai `break`: fuori da un ciclo `break` interrompe anche lo script chiamante (c'e' un test).
 - Creare il repository GitHub pubblico `rtecnocopy89/CyberRSecurityCheck`, push del branch `main`, tag `v2.0.0`.
 - Idee future: verifica firma/hash del file unico prima dell'esecuzione, export PDF del rapporto,
   stessa estetica di WinRUtil se Rosario lo chiede.

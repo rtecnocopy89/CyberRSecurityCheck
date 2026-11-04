@@ -1585,10 +1585,7 @@ function Get-RemoteAccess {
         foreach ($ln in $lines) { $rows.Add([pscustomobject]@{ Tipo = 'Log connessioni'; Nome = (Split-Path $l -Leaf); Dettaglio = $ln.Trim(); Note = $l }) }
         if ($script:OutDir) { try { Copy-Item -LiteralPath $l -Destination (Join-Path $script:OutDir ('log_' + (Split-Path (Split-Path $l -Parent) -Leaf) + '_' + (Split-Path $l -Leaf))) -ErrorAction SilentlyContinue } catch { } }
     }
-    $names = @($rows | Where-Object { $_.Tipo -ne 'Log connessioni' } | Select-Object -ExpandProperty Nome -Unique)
-    foreach ($nm in $names) {
-        Add-Finding 'MEDIA' 'Accesso remoto' "Programma di controllo remoto presente sul PC: $nm" 'Vedi accesso_remoto.csv e i log copiati nel report.' "Verificare che sia autorizzato e chi si collega. Con il controllo remoto un truffatore puo' modificare il bonifico mentre il cliente lavora. Controllare nei log le connessioni in ingresso nelle date dei bonifici fraudolenti. Se e' lo strumento del vostro tecnico, aggiungerlo in AllowRemoteTools di config.json." -Key ([string]$nm) -KeyType remote
-    }
+    Add-RemoteToolFindings $rows.ToArray()
     # RDP
     try {
         $deny = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' -ErrorAction Stop).fDenyTSConnections
@@ -1596,6 +1593,36 @@ function Get-RemoteAccess {
         # lo stato RDP e' valutato in 'Configurazione di sicurezza'
     } catch { }
     return $rows.ToArray()
+}
+
+function Add-RemoteToolFindings {
+    # Una sola segnalazione per programma: processo, servizio e voce installata dello stesso strumento vanno insieme
+    param([object[]]$Rows)
+    $tools = [ordered]@{}
+    foreach ($r in @($Rows | Where-Object { $_.Tipo -ne 'Log connessioni' -and $_.Tipo -ne 'RDP' })) {
+        $tool = [regex]::Match(("{0} {1}" -f $r.Nome, $r.Dettaglio), $script:RemoteToolRegex).Value.ToLowerInvariant()
+        if (-not $tool) { $tool = ([string]$r.Nome).ToLowerInvariant() }
+        if (-not $tools.Contains($tool)) { $tools[$tool] = New-Object 'System.Collections.Generic.List[object]' }
+        $tools[$tool].Add($r)
+    }
+    foreach ($tool in @($tools.Keys)) {
+        $items = $tools[$tool].ToArray()
+        $display = $null
+        foreach ($t in @('Installato', 'Servizio', 'Processo')) {
+            if (-not $display) { $display = @($items | Where-Object { $_.Tipo -eq $t } | Select-Object -ExpandProperty Nome -First 1) | Select-Object -First 1 }
+        }
+        if (-not $display) { $display = [string]$items[0].Nome }
+        $parts = @()
+        foreach ($t in @('Installato', 'Servizio', 'Processo')) {
+            $n = @($items | Where-Object { $_.Tipo -eq $t } | Select-Object -ExpandProperty Nome -Unique)
+            if ($n.Count -gt 0) {
+                $lbl = switch ($t) { 'Installato' { 'programma installato' } 'Servizio' { 'servizio' } default { 'processo in esecuzione' } }
+                $parts += ('{0} ({1})' -f $lbl, ($n -join ', '))
+            }
+        }
+        $key = ((@($items | Select-Object -ExpandProperty Nome -Unique) + $tool) -join ' | ')
+        Add-Finding 'MEDIA' 'Accesso remoto' "Programma di controllo remoto presente sul PC: $display" ("Trovato come: {0}. Vedi accesso_remoto.csv e i log copiati nel report." -f ($parts -join '; ')) "Verificare che sia autorizzato e chi si collega. Con il controllo remoto un truffatore puo' modificare il bonifico mentre il cliente lavora. Controllare nei log le connessioni in ingresso nelle date dei bonifici fraudolenti. Se e' lo strumento del vostro tecnico, aggiungerlo in AllowRemoteTools di config.json." -Key $key -KeyType remote
+    }
 }
 
 function Get-NetworkReport {

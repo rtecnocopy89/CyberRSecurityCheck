@@ -62,7 +62,8 @@ if ($crsIsWindows -and -not $crsIsAdmin -and $env:CRS_NO_ELEVATE -ne '1') {
         Write-Host 'Riavvio come amministratore annullato. Proseguo senza privilegi: alcuni controlli saranno incompleti.' -ForegroundColor Yellow
         $crsIsAdmin = $null
     }
-    if ($null -ne $crsIsAdmin) { break }
+    # return e non break: break fuori da un ciclo interrompe anche lo script o il ciclo di chi ha lanciato il comando
+    if ($null -ne $crsIsAdmin) { return }
 }
 
 # ---------------------------------------------------------------- componenti incorporati

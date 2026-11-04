@@ -117,6 +117,19 @@ Assert 'Estensione autorizzata declassata a dettaglio' { $fa.Gravita -eq 'BASSA'
 Assert 'Con estensione autorizzata nessun allarme CONFERMATO' { @($script:Findings | Where-Object { $_.Gravita -eq 'ALTA' }).Count -eq 0 }
 Assert 'Accesso remoto autorizzato (contiene "anydesk")' { Test-Allowed 'AnyDesk.exe' 'remote' }
 Assert 'Accesso remoto non autorizzato' { -not (Test-Allowed 'TeamViewer' 'remote') }
+$remoteRows = @(
+    [pscustomobject]@{ Tipo = 'Processo'; Nome = 'AnyDesk.exe'; Dettaglio = 'C:\Program Files (x86)\AnyDesk\AnyDesk.exe'; Note = 'PID 1' }
+    [pscustomobject]@{ Tipo = 'Servizio'; Nome = 'AnyDesk Service'; Dettaglio = '"C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --service'; Note = 'Running / Auto' }
+    [pscustomobject]@{ Tipo = 'Installato'; Nome = 'AnyDesk'; Dettaglio = 'AnyDesk Software GmbH'; Note = '' }
+    [pscustomobject]@{ Tipo = 'Log connessioni'; Nome = 'ad.trace'; Dettaglio = 'incoming'; Note = '' }
+    [pscustomobject]@{ Tipo = 'Processo'; Nome = 'TeamViewer.exe'; Dettaglio = 'C:\Program Files\TeamViewer\TeamViewer.exe'; Note = 'PID 2' }
+)
+$script:Findings.Clear()
+Add-RemoteToolFindings $remoteRows
+$rf = @($script:Findings | Where-Object { $_.Categoria -eq 'Accesso remoto' })
+Assert 'Controllo remoto: una sola riga per programma (processo, servizio e installato insieme)' { $rf.Count -eq 2 -and @($rf | Where-Object { $_.Titolo -like '*AnyDesk*' }).Count -eq 1 }
+Assert 'Controllo remoto: la riga elenca i componenti trovati' { $a = @($rf | Where-Object { $_.Titolo -like '*AnyDesk*' })[0]; $a.Dettaglio -like '*programma installato (AnyDesk)*' -and $a.Dettaglio -like '*servizio (AnyDesk Service)*' -and $a.Dettaglio -like '*processo in esecuzione (AnyDesk.exe)*' }
+Assert 'Controllo remoto autorizzato = dettaglio, altro programma resta da controllare' { (@($rf | Where-Object { $_.Titolo -like '*AnyDesk*' })[0].Gravita -eq 'BASSA') -and (@($rf | Where-Object { $_.Titolo -like '*TeamViewer*' })[0].Gravita -eq 'MEDIA') }
 Assert 'Config non valida -> predefinita' { $bad = Join-Path $tmp 'bad.json'; Set-Content -LiteralPath $bad -Value '{ non json'; $c = Import-CyberConfig $bad; @($c['BankDomains']).Count -ge 1 }
 $script:Config = $null
 
@@ -238,6 +251,12 @@ if (Test-Path -LiteralPath $bundle) {
     $bytes = [IO.File]::ReadAllBytes($bundle)
     Assert 'File unico senza BOM' { -not ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) }
     Assert 'File unico solo ASCII' { @($bytes | Where-Object { $_ -gt 127 }).Count -eq 0 }
+    Assert 'Lanciatore senza break (uscirebbe anche dallo script di chi lo avvia)' {
+        $launcher = ([IO.File]::ReadAllText($bundle) -split 'function ConvertFrom-CrsBlob')[0]
+        $lt = $null; $le = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput($launcher, [ref]$lt, [ref]$le)
+        @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.BreakStatementAst] }, $true)).Count -eq 0
+    }
     Assert 'File unico con sintassi valida' { $t = $null; $e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile($bundle, [ref]$t, [ref]$e); $e.Count -eq 0 }
     Assert 'Impronta SHA256 pubblicata corretta' {
         $sf = "$bundle.sha256"
