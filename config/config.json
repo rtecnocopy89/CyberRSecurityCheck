@@ -1,0 +1,26 @@
+{
+  "_nota": "Configurazione di Triage-Bonifici. Le chiavi che iniziano con _ sono commenti e vengono ignorate.",
+
+  "_BankDomains": "Domini dell'home banking da sorvegliare (estensioni con accesso, file hosts, confronto DNS).",
+  "BankDomains": ["relaxbanking.it", "bcccampaniacentro.it", "bcc.it", "iccreabanca.it", "inbank.it", "cse.it"],
+
+  "_RecentDays": "Quanti giorni indietro cercare file nuovi ed eventi di sicurezza.",
+  "RecentDays": 30,
+
+  "_DnsCompare": "true = confronta la risoluzione dei domini banca con DNS pubblici (1.1.1.1, 8.8.8.8, 9.9.9.9). Unico controllo che usa la rete.",
+  "DnsCompare": true,
+
+  "_Allow": "ELEMENTI AUTORIZZATI: dopo averli verificati, inserirli qui. Nelle analisi successive compariranno come BASSA con l'etichetta [AUTORIZZATO]. Aggiungere solo elementi controllati di persona.",
+
+  "_AllowExtensionIds": "ID delle estensioni del browser verificate (32 lettere, si trovano nel report o in chrome://extensions).",
+  "AllowExtensionIds": [],
+
+  "_AllowRemoteTools": "Nomi (anche parziali) dei programmi di controllo remoto usati dal tecnico, es. \"AnyDesk\".",
+  "AllowRemoteTools": [],
+
+  "_AllowCertThumbprints": "Thumbprint dei certificati radice aziendali verificati.",
+  "AllowCertThumbprints": [],
+
+  "_AllowPaths": "Cartelle con programmi legittimi non firmati. In JSON le barre vanno doppie, es. C:\\ProgramData\\GestionaleXYZ\\",
+  "AllowPaths": []
+}

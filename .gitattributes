@@ -1,0 +1,8 @@
+* text=auto
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.txt text eol=crlf
+*.json text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+cyberrsecuritycheck.ps1.sha256 text eol=lf

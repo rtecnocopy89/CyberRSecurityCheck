@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CyberRSecurityCheck</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 38'%3E%3Cpath d='M17 1 32 7v11c0 9.5-6.4 16.4-15 19C8.4 34.4 2 27.5 2 18V7z' fill='%233b82f6'/%3E%3Cpath d='m10 19 5 5 9-10' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0a101c; --bg2:#0d1524; --panel:#111a2b; --panel2:#0f1828; --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.14);
+  --tx:#e7edf6; --mu:#93a1b8; --mu2:#6f7d94;
+  --accent:#3b82f6; --accent2:#60a5fa;
+  --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --info:#64748b;
+  --radius:14px; --ease:cubic-bezier(.15,.83,.66,1);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,rgba(59,130,246,.12),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(34,197,94,.06),transparent 60%),var(--bg);
+  color:var(--tx);font:14px/1.5 "Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit}
+.app{min-height:100%;display:flex;flex-direction:column}
+
+/* ---------- header ---------- */
+.top{display:flex;align-items:center;gap:14px;padding:16px 28px;border-bottom:1px solid var(--line);background:rgba(10,16,28,.72);backdrop-filter:blur(8px);position:sticky;top:0;z-index:5}
+.brand{display:flex;align-items:center;gap:12px}
+.brand h1{font-size:17px;margin:0;letter-spacing:.2px;font-weight:650}
+.brand h1 span{color:var(--accent2)}
+.brand small{display:block;color:var(--mu);font-size:12px;margin-top:1px}
+.top .meta{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--line2);color:var(--mu);font-size:12px;background:rgba(255,255,255,.02)}
+.chip i{width:7px;height:7px;border-radius:50%;background:var(--ok);display:inline-block}
+.chip.warn i{background:var(--warn)}
+main{flex:1;width:100%;max-width:1120px;margin:0 auto;padding:28px 24px 40px}
+.view{display:none;animation:fade .35s var(--ease)}
+.view.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ---------- buttons ---------- */
+.crs-btn{min-width:120px;position:relative;cursor:pointer;padding:11px 18px;border:0;border-radius:9px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);
+  background:radial-gradient(ellipse at bottom,rgba(71,81,92,1) 0%,rgba(11,21,30,1) 45%);
+  color:rgba(255,255,255,.78);font-weight:600;letter-spacing:.2px;
+  transition:all 1s var(--ease)}
+.crs-btn::before{content:"";width:70%;height:1px;position:absolute;bottom:0;left:15%;
+  background:linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,1) 50%,rgba(255,255,255,0) 100%);opacity:.2;transition:all 1s var(--ease)}
+.crs-btn:hover{color:#fff;transform:scale(1.04) translateY(-2px)}
+.crs-btn:hover::before{opacity:1}
+.crs-btn:focus-visible{outline:2px solid var(--accent2);outline-offset:3px}
+.crs-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.crs-btn.primary{background:radial-gradient(ellipse at bottom,rgba(59,130,246,.95) 0%,rgba(13,27,48,1) 55%);color:#fff;box-shadow:inset 0 0 0 1px rgba(96,165,250,.35),0 8px 24px -12px rgba(59,130,246,.8)}
+.crs-btn.danger{background:radial-gradient(ellipse at bottom,rgba(239,68,68,.85) 0%,rgba(40,14,18,1) 55%);color:#fff;box-shadow:inset 0 0 0 1px rgba(248,113,113,.35)}
+.crs-btn.ghost{background:transparent;box-shadow:inset 0 0 0 1px var(--line2)}
+.crs-btn.sm{min-width:0;padding:7px 12px;font-size:13px}
+
+/* ---------- home ---------- */
+.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:22px}
+.hero h2{font-size:26px;margin:0 0 6px;font-weight:650;letter-spacing:-.2px}
+.hero p{margin:0;color:var(--mu);max-width:640px}
+.banner{display:none;align-items:center;gap:14px;padding:12px 16px;border-radius:12px;border:1px solid rgba(245,158,11,.35);background:rgba(245,158,11,.08);margin-bottom:18px}
+.banner.on{display:flex}
+.banner p{margin:0;flex:1;color:#f8d38b}
+.banner.bad{border-color:rgba(239,68,68,.45);background:rgba(239,68,68,.1)}
+.banner.bad p{color:#fecaca;font-weight:600}
+.actions{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media (max-width:900px){.actions{grid-template-columns:1fr}}
+.card{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.01));border:1px solid var(--line);border-radius:var(--radius);padding:20px;position:relative;overflow:hidden}
+.action{display:flex;flex-direction:column;gap:12px;transition:border-color .4s var(--ease),transform .4s var(--ease),box-shadow .4s var(--ease)}
+.action:hover{border-color:rgba(96,165,250,.35);transform:translateY(-2px);box-shadow:0 18px 40px -24px rgba(59,130,246,.55)}
+.action.rec::after{content:"Consigliata";position:absolute;top:16px;right:16px;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--accent2);border:1px solid rgba(96,165,250,.35);padding:2px 8px;border-radius:999px}
+.ico{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;background:rgba(59,130,246,.12);border:1px solid rgba(96,165,250,.25)}
+.ico svg{width:22px;height:22px;stroke:var(--accent2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.action h3{margin:0;font-size:16px;font-weight:650}
+.action p{margin:0;color:var(--mu);flex:1}
+.action ul{margin:0;padding-left:18px;color:var(--mu);font-size:13px}
+.action .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px}
+.dur{color:var(--mu2);font-size:12px}
+select{background:var(--panel2);color:var(--tx);border:1px solid var(--line2);border-radius:8px;padding:7px 10px;font:inherit}
+.opts{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-top:18px;color:var(--mu);font-size:13px}
+.opts label{display:inline-flex;gap:8px;align-items:center;cursor:pointer}
+.opts input{accent-color:var(--accent)}
+.trust{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px}
+@media (max-width:900px){.trust{grid-template-columns:1fr}}
+.trust div{display:flex;gap:10px;align-items:flex-start;color:var(--mu);font-size:13px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.015)}
+.trust b{color:var(--tx);display:block;font-weight:600}
+.trust svg{flex:0 0 18px;width:18px;height:18px;stroke:var(--ok);fill:none;stroke-width:2;margin-top:2px}
+
+/* ---------- progress ---------- */
+.run-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.run-head h2{margin:0;font-size:22px;font-weight:650}
+.run-head .step{color:var(--mu);margin-top:4px}
+.big{font-size:40px;font-weight:700;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.crs-progress{width:100%;background:rgba(236,236,238,.12);height:10px;border-radius:7px;overflow:hidden}
+.crs-progress .bar{width:0;height:10px;border-radius:7px;background:linear-gradient(90deg,#fff,var(--accent2));transition:width .5s var(--ease);box-shadow:0 0 14px rgba(96,165,250,.6)}
+.crs-progress.indet .bar{animation:crs-loading 5s cubic-bezier(.4,1.01,1,1) infinite}
+@keyframes crs-loading{0%{width:0%}50%{width:100%}100%{width:0%}}
+.run-meta{display:flex;justify-content:space-between;color:var(--mu2);font-size:12px;margin-top:8px;font-variant-numeric:tabular-nums}
+.log{margin-top:18px;height:340px;overflow:auto;background:#070c16;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:12.5px/1.6 "Cascadia Mono",Consolas,monospace}
+.log div{white-space:pre-wrap;word-break:break-word}
+.log .t{color:var(--mu2);margin-right:8px}
+.c-Green,.c-DarkGreen{color:#86efac}.c-Yellow,.c-DarkYellow{color:#fcd34d}.c-Red{color:#fca5a5;font-weight:600}.c-Cyan{color:#93c5fd}.c-White{color:#e5e7eb}.c-Gray{color:#94a3b8}
+.run-foot{display:flex;justify-content:flex-end;margin-top:16px}
+
+/* ---------- results ---------- */
+.res-top{display:grid;grid-template-columns:220px 1fr;gap:16px}
+@media (max-width:800px){.res-top{grid-template-columns:1fr}}
+.score{display:flex;flex-direction:column;align-items:center;justify-content:center}
+.score svg{width:170px;height:170px}
+.score .verdict{font-weight:700;font-size:17px;margin-top:4px}
+.res-msg{font-size:17px;font-weight:600;margin:0 0 14px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media (max-width:800px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.tile{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:rgba(255,255,255,.015)}
+.tile b{display:block;font-size:26px;line-height:1.15;font-variant-numeric:tabular-nums}
+.tile span{color:var(--mu);font-size:11.5px;text-transform:uppercase;letter-spacing:.5px}
+.paths{color:var(--mu2);font-size:12px;margin-top:12px;word-break:break-all}
+.sec{margin-top:26px}
+.sec h3{display:flex;align-items:center;gap:10px;font-size:15px;margin:0 0 10px}
+.sec h3 .n{font-size:12px;color:var(--mu);font-weight:500}
+.items{display:flex;flex-direction:column;gap:10px}
+.item{border:1px solid var(--line);border-left:3px solid var(--info);border-radius:12px;padding:12px 14px;background:rgba(255,255,255,.015)}
+.item.ALTA{border-left-color:var(--bad);background:rgba(239,68,68,.05)}
+.item.MEDIA{border-left-color:var(--warn)}
+.item.CRIT{border-left-color:var(--warn)}
+.item .h{display:flex;gap:10px;align-items:flex-start}
+.pill{flex:0 0 auto;font-size:10.5px;font-weight:800;letter-spacing:.4px;padding:3px 8px;border-radius:999px;color:#fff;background:var(--info);margin-top:1px}
+.pill.ALTA{background:var(--bad)}.pill.MEDIA,.pill.CRIT{background:#b7791f}
+.item .ttl{font-weight:600;flex:1}
+.item .area{color:var(--mu2);font-size:12px;white-space:nowrap}
+.item .det{color:var(--mu);font:12px/1.55 "Cascadia Mono",Consolas,monospace;margin-top:6px;word-break:break-word}
+.item .adv{margin-top:6px;color:#cbd5e1;font-size:13px}
+.empty{display:flex;gap:12px;align-items:center;padding:14px 16px;border:1px solid rgba(34,197,94,.3);background:rgba(34,197,94,.07);border-radius:12px;color:#bbf7d0}
+.empty svg{width:20px;height:20px;stroke:#4ade80;fill:none;stroke-width:2.2}
+details.tech{margin-top:22px;border:1px solid var(--line);border-radius:12px;padding:0 14px}
+details.tech summary{cursor:pointer;padding:12px 0;color:var(--mu);font-weight:600}
+details.tech .items{padding-bottom:14px}
+.res-foot{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px;justify-content:flex-end}
+.footer{color:var(--mu2);font-size:12px;text-align:center;padding:14px}
+@media (prefers-reduced-motion:reduce){*,*::before{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <svg width="30" height="34" viewBox="0 0 34 38" aria-hidden="true"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs><path d="M17 1 32 7v11c0 9.5-6.4 16.4-15 19C8.4 34.4 2 27.5 2 18V7z" fill="url(#g)"/><path d="m10 19 5 5 9-10" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div><h1>Cyber<span>R</span>SecurityCheck</h1><small>Analisi di sicurezza per PC usati per l'home banking</small></div>
+    </div>
+    <div class="meta">
+      <span class="chip" id="chipPc"><i></i><span>PC</span></span>
+      <span class="chip" id="chipAdm"><i></i><span>Amministratore</span></span>
+      <span class="chip" id="chipVer">v</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- HOME -->
+    <section class="view on" id="vHome" aria-labelledby="hHome">
+      <div class="banner" id="admBanner">
+        <p>Lo strumento non e' in esecuzione come amministratore: alcuni controlli (eventi, memoria, altri utenti) saranno incompleti.</p>
+        <button type="button" class="crs-btn sm" id="btnElevate">Riavvia come amministratore</button>
+      </div>
+      <div class="hero">
+        <div>
+          <h2 id="hHome">Verifica la sicurezza di questo PC</h2>
+          <p>Cerca le cause delle frodi sui bonifici (IBAN sostituito, credenziali rubate) e controlla la configurazione di sicurezza. Vengono segnalati come problemi solo gli indicatori certi.</p>
+        </div>
+      </div>
+      <div class="actions">
+        <article class="card action rec">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8.6 8 9 4.6-.4 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <h3>Analisi completa</h3>
+          <p>Browser ed estensioni, codice iniettato in memoria, programmi in avvio, controllo remoto, rete, proxy/DNS, configurazione e test degli appunti.</p>
+          <div class="row"><span class="dur">3-10 minuti</span><button type="button" class="crs-btn primary" data-mode="Completo">Avvia analisi</button></div>
+        </article>
+        <article class="card action">
+          <div class="ico"><svg viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><path d="M8 13h8M8 17h5"/></svg></div>
+          <h3>Test appunti</h3>
+          <p>Copia un IBAN di prova e verifica se un programma lo sostituisce (malware "clipper"). Ripristina poi il contenuto originale.</p>
+          <div class="row"><span class="dur">circa 30 secondi</span><button type="button" class="crs-btn" data-mode="ClipTest">Avvia test</button></div>
+        </article>
+        <article class="card action">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M2 12h4l3-8 4 16 3-8h6"/></svg></div>
+          <h3>Monitor durante il bonifico</h3>
+          <p>Lascialo attivo mentre il cliente esegue il bonifico: registra modifiche agli appunti, nuovi programmi, proxy e file hosts.</p>
+          <div class="row">
+            <label class="dur">Durata <select id="minutes" aria-label="Durata del monitor"><option value="10">10 min</option><option value="30" selected>30 min</option><option value="60">60 min</option></select></label>
+            <button type="button" class="crs-btn" data-mode="Monitor">Avvia monitor</button>
+          </div>
+        </article>
+      </div>
+      <div class="opts">
+        <label><input type="checkbox" id="fast"> Analisi rapida (salta la scansione della memoria)</label>
+        <button type="button" class="crs-btn ghost sm" id="btnFolderHome">Apri cartella rapporti</button>
+      </div>
+      <div class="trust">
+        <div><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span><b>Sola lettura</b>Non cancella e non modifica nulla sul PC.</span></div>
+        <div><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span><b>Nessun dato inviato</b>Tutto resta sul PC (unico uso della rete: confronto DNS).</span></div>
+        <div><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span><b>Prove integre</b>Rapporto con impronte SHA256, valido da allegare alla denuncia.</span></div>
+      </div>
+    </section>
+
+    <!-- RUN -->
+    <section class="view" id="vRun" aria-live="polite">
+      <div class="banner bad" id="alertBanner"><p id="alertText"></p></div>
+      <div class="run-head">
+        <div><h2 id="runTitle">Analisi in corso</h2><div class="step" id="runStep">Preparazione...</div></div>
+        <div class="big" id="runPct">0%</div>
+      </div>
+      <div class="crs-progress" id="prog" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="bar" id="progBar"></div></div>
+      <div class="run-meta"><span id="runCount"></span><span id="runTime">00:00</span></div>
+      <div class="log" id="log" aria-label="Registro dell'analisi"></div>
+      <div class="run-foot"><button type="button" class="crs-btn ghost" id="btnCancel">Interrompi</button></div>
+    </section>
+
+    <!-- RESULTS -->
+    <section class="view" id="vRes">
+      <div class="res-top">
+        <div class="card score">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="10"/>
+            <circle id="ring" cx="60" cy="60" r="52" fill="none" stroke="#22c55e" stroke-width="10" stroke-linecap="round" stroke-dasharray="0 326.7" transform="rotate(-90 60 60)" style="transition:stroke-dasharray 1.2s cubic-bezier(.15,.83,.66,1)"/>
+            <text id="ringTxt" x="60" y="66" text-anchor="middle" font-size="30" font-weight="700" fill="#e7edf6">0</text>
+            <text x="60" y="84" text-anchor="middle" font-size="10" fill="#93a1b8">su 100</text>
+          </svg>
+          <div class="verdict" id="verdict"></div>
+        </div>
+        <div class="card">
+          <p class="res-msg" id="resMsg"></p>
+          <div class="tiles">
+            <div class="tile"><b id="tA" style="color:#f87171">0</b><span>Problemi confermati</span></div>
+            <div class="tile"><b id="tM" style="color:#fbbf24">0</b><span>Da controllare</span></div>
+            <div class="tile"><b id="tC" style="color:#fbbf24">0</b><span>Impostazioni da correggere</span></div>
+            <div class="tile"><b id="tS">0</b><span>Controlli eseguiti</span></div>
+          </div>
+          <div class="paths" id="resPaths"></div>
+        </div>
+      </div>
+
+      <div class="sec"><h3>Problemi confermati <span class="n" id="nA"></span></h3><div class="items" id="lA"></div></div>
+      <div class="sec" id="secM"><h3>Da controllare <span class="n" id="nM"></span></h3><div class="items" id="lM"></div></div>
+      <div class="sec" id="secC"><h3>Impostazioni di sicurezza da correggere <span class="n" id="nC"></span></h3><div class="items" id="lC"></div></div>
+      <details class="tech" id="secB"><summary>Dettagli tecnici e informazioni (<span id="nB">0</span>)</summary><div class="items" id="lB"></div></details>
+
+      <div class="res-foot">
+        <button type="button" class="crs-btn ghost" id="btnExit">Esci</button>
+        <button type="button" class="crs-btn ghost" id="btnNew">Nuova analisi</button>
+        <button type="button" class="crs-btn" id="btnFolder">Apri cartella</button>
+        <button type="button" class="crs-btn primary" id="btnReport">Apri rapporto completo</button>
+      </div>
+    </section>
+  </main>
+  <div class="footer" id="foot">CyberRSecurityCheck &middot; analisi locale in sola lettura</div>
+</div>
+
+<script nonce="__NONCE__">
+(function () {
+  'use strict';
+  var token = (location.hash || '').replace(/^#/, '');
+  history.replaceState(null, '', location.pathname);
+  var $ = function (id) { return document.getElementById(id); };
+  var logIndex = 0, timer = null, startedAt = 0, mode = '';
+
+  function api(method, path, body) {
+    return fetch(path, {
+      method: method, cache: 'no-store',
+      headers: { 'X-Token': token, 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  }
+  function show(id) { ['vHome', 'vRun', 'vRes'].forEach(function (v) { $(v).classList.toggle('on', v === id); }); window.scrollTo(0, 0); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function fmt(sec) { sec = Math.max(0, Math.floor(sec)); var m = Math.floor(sec / 60), s = sec % 60; return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s; }
+
+  api('GET', '/api/info').then(function (i) {
+    $('chipPc').lastChild.textContent = i.pc;
+    $('chipAdm').lastChild.textContent = i.isAdmin ? 'Amministratore' : 'Non amministratore';
+    $('chipAdm').classList.toggle('warn', !i.isAdmin);
+    $('admBanner').classList.toggle('on', !i.isAdmin);
+    $('chipVer').textContent = 'v' + i.version;
+    if (i.phase === 'running') { show('vRun'); poll(); }
+  }).catch(function () { document.body.innerHTML = '<p style="padding:40px;color:#fca5a5">Sessione non valida: riavviare CyberRSecurityCheck.</p>'; });
+
+  document.querySelectorAll('[data-mode]').forEach(function (b) {
+    b.addEventListener('click', function () { start(b.getAttribute('data-mode')); });
+  });
+
+  function start(m) {
+    mode = m; logIndex = 0; $('log').textContent = '';
+    $('alertBanner').classList.remove('on');
+    $('runTitle').textContent = m === 'Monitor' ? 'Monitor attivo' : (m === 'ClipTest' ? 'Test appunti in corso' : 'Analisi in corso');
+    $('runStep').textContent = m === 'Monitor' ? 'Ora fate eseguire il bonifico al cliente come al solito.' : 'Preparazione...';
+    $('btnCancel').textContent = m === 'Monitor' ? 'Termina monitor' : 'Interrompi';
+    $('btnCancel').disabled = false;
+    setProgress(0, m !== 'Completo' && m !== 'Monitor');
+    show('vRun');
+    api('POST', '/api/start', { mode: m, minutes: parseInt($('minutes').value, 10), fast: $('fast').checked })
+      .then(function () { startedAt = Date.now(); poll(); })
+      .catch(function (e) { alert('Impossibile avviare: ' + e.message); show('vHome'); });
+  }
+
+  function setProgress(p, indet) {
+    $('prog').classList.toggle('indet', !!indet);
+    $('progBar').style.width = indet ? '' : Math.max(0, Math.min(100, p)) + '%';
+    $('prog').setAttribute('aria-valuenow', String(p));
+    $('runPct').textContent = indet ? '' : Math.round(p) + '%';
+  }
+
+  function poll() {
+    clearTimeout(timer);
+    api('GET', '/api/status?since=' + logIndex).then(function (s) {
+      if (!startedAt && s.startedAt) startedAt = Date.now() - s.elapsed * 1000;
+      var box = $('log'), atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+      (s.log || []).forEach(function (l) {
+        var d = el('div', 'c-' + (l.c || 'Gray'));
+        d.appendChild(el('span', 't', l.t)); d.appendChild(document.createTextNode(l.m));
+        box.appendChild(d);
+      });
+      logIndex = s.logIndex;
+      if (atBottom) box.scrollTop = box.scrollHeight;
+      if (s.name) $('runStep').textContent = s.total > 1 ? ('Passo ' + s.step + ' di ' + s.total + ' — ' + s.name) : s.name;
+      $('runCount').textContent = s.total > 1 ? (s.step + ' / ' + s.total + ' controlli') : '';
+      $('runTime').textContent = fmt(s.elapsed);
+      if (s.percent >= 0 && !(mode === 'ClipTest')) setProgress(s.percent, false);
+      if (s.lastAlert) { $('alertText').textContent = 'ATTENZIONE: ' + s.lastAlert + ' — NON confermare il bonifico.'; $('alertBanner').classList.add('on'); }
+      if (s.phase === 'done' || s.phase === 'error') { setProgress(100, false); loadResult(); return; }
+      timer = setTimeout(poll, 400);
+    }).catch(function () { timer = setTimeout(poll, 1200); });
+  }
+
+  function item(f, cls, pillText) {
+    var d = el('div', 'item ' + cls), h = el('div', 'h');
+    h.appendChild(el('span', 'pill ' + cls, pillText));
+    h.appendChild(el('span', 'ttl', f.title));
+    if (f.area) h.appendChild(el('span', 'area', f.area));
+    d.appendChild(h);
+    if (f.detail) d.appendChild(el('div', 'det', f.detail));
+    if (f.advice) d.appendChild(el('div', 'adv', f.advice));
+    return d;
+  }
+  function fill(listId, arr, cls, pill, emptyText) {
+    var l = $(listId); l.textContent = '';
+    if (!arr.length && emptyText) {
+      var e = el('div', 'empty');
+      e.innerHTML = '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>';
+      e.appendChild(el('span', '', emptyText)); l.appendChild(e); return;
+    }
+    arr.forEach(function (f) { l.appendChild(item(f, cls, pill)); });
+  }
+
+  function loadResult() {
+    api('GET', '/api/result').then(function (r) {
+      if (!r || !r.summary) { alert(r && r.error ? r.error : 'Analisi terminata senza risultati.'); show('vHome'); return; }
+      var s = r.summary, F = r.findings || [];
+      var A = F.filter(function (f) { return f.sev === 'ALTA'; });
+      var M = F.filter(function (f) { return f.sev === 'MEDIA'; });
+      var B = F.filter(function (f) { return f.sev === 'BASSA'; });
+      var C = (r.hardening || []).filter(function (h) { return h.state === 'CRITICO'; }).map(function (h) {
+        return { title: h.check, area: h.area, detail: h.value, advice: h.advice };
+      });
+      var col = s.score >= 85 ? '#22c55e' : (s.score >= 60 ? '#f59e0b' : (s.score >= 30 ? '#f97316' : '#ef4444'));
+      if (s.incomplete && A.length === 0) col = '#94a3b8';
+      $('tS').style.color = s.incomplete ? '#fbbf24' : '';
+      $('ring').setAttribute('stroke', col);
+      $('ringTxt').setAttribute('fill', col);
+      $('ringTxt').textContent = s.score;
+      $('verdict').textContent = s.verdict; $('verdict').style.color = col;
+      setTimeout(function () { $('ring').setAttribute('stroke-dasharray', (326.7 * s.score / 100).toFixed(1) + ' 326.7'); }, 60);
+      $('resMsg').textContent = s.message;
+      $('tA').textContent = A.length; $('tM').textContent = M.length; $('tC').textContent = C.length; $('tS').textContent = r.sectionsOk + '/' + r.sectionsTotal;
+      $('resPaths').textContent = r.outDir ? ('Rapporto salvato in: ' + r.outDir) : '';
+      $('nA').textContent = A.length ? '(' + A.length + ')' : '';
+      $('nM').textContent = M.length ? '(' + M.length + ')' : '';
+      $('nC').textContent = C.length ? '(' + C.length + ')' : '';
+      fill('lA', A, 'ALTA', 'CONFERMATO', 'Nessun problema confermato.');
+      fill('lM', M, 'MEDIA', 'DA CONTROLLARE');
+      fill('lC', C, 'CRIT', 'DA CORREGGERE');
+      $('secM').style.display = M.length ? '' : 'none';
+      $('secC').style.display = C.length ? '' : 'none';
+      fill('lB', B, 'BASSA', 'INFO');
+      $('nB').textContent = B.length; $('secB').style.display = B.length ? '' : 'none';
+      $('btnReport').disabled = !r.html;
+      show('vRes');
+    }).catch(function (e) { alert('Errore nel leggere i risultati: ' + e.message); show('vHome'); });
+  }
+
+  $('btnCancel').addEventListener('click', function () { $('btnCancel').disabled = true; $('btnCancel').textContent = 'Interruzione in corso...'; api('POST', '/api/cancel'); });
+  $('btnNew').addEventListener('click', function () { show('vHome'); });
+  $('btnReport').addEventListener('click', function () { api('POST', '/api/open', { what: 'report' }); });
+  $('btnFolder').addEventListener('click', function () { api('POST', '/api/open', { what: 'folder' }); });
+  $('btnFolderHome').addEventListener('click', function () { api('POST', '/api/open', { what: 'base' }); });
+  $('btnElevate').addEventListener('click', function () { api('POST', '/api/elevate').then(function () { document.body.innerHTML = '<p style="padding:40px;color:#93a1b8">Riavvio come amministratore... questa finestra si pu&ograve; chiudere.</p>'; }); });
+  $('btnExit').addEventListener('click', function () { api('POST', '/api/exit').finally(function () { window.close(); }); });
+  setInterval(function () { if ($('vHome').classList.contains('on') || $('vRes').classList.contains('on')) api('GET', '/api/ping').catch(function () {}); }, 5000);
+})();
+</script>
+</body>
+</html>

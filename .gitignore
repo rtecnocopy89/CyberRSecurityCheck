@@ -1,0 +1,6 @@
+Report/
+*.zip
+*.log
+.vs/
+# Nota: cyberrsecuritycheck.ps1 e' committato di proposito: e' il file servito con "irm ... | iex".
+/config.json
