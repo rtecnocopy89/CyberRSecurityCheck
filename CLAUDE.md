@@ -71,9 +71,9 @@ Richiesta esplicita di Rosario: il programma non deve mai segnalare cose inutili
   gia' gestiti dai try/catch: PowerShell li registra comunque nella trascrizione, ma non compaiono in console.
 - Provato anche sul Windows 11 principale (DESKROS, 5 novembre 2026): 142 test PASS su 5.1 e 7.6, analisi reale
   senza CONFERMATI. La cartella del repo, copiata dall'altro Windows, ha un altro proprietario (SID): git chiede
-  `safe.directory`. Il push usa HTTPS con Git Credential Manager, come WinRUtil (`gh` non e' installato).
+  `safe.directory`. Il push usa HTTPS con Git Credential Manager, come WinRUtil.
 - Nel lanciatore usare `return`, mai `break`: fuori da un ciclo `break` interrompe anche lo script chiamante (c'e' un test).
 - Pubblicato su https://github.com/rtecnocopy89/CyberRSecurityCheck (branch `main`, tag `v2.0.0`).
-  Manca la release GitHub con l'impronta SHA256 nelle note (serve `gh` o il sito).
+  Release v2.0.0 con file unico, `.sha256` e impronta nelle note. `gh` installato e collegato come rtecnocopy89.
 - Idee future: verifica firma/hash del file unico prima dell'esecuzione, export PDF del rapporto,
   stessa estetica di WinRUtil se Rosario lo chiede.
