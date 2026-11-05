@@ -40,7 +40,9 @@ Richiesta esplicita di Rosario: il programma non deve mai segnalare cose inutili
   da Rosario, opzioni B e C). Niente risorse esterne, niente commenti di attribuzione nel codice.
 - `config/config.json` BankDomains, RecentDays, DnsCompare, Allow* (elementi autorizzati -> BASSA).
 - `Compile.ps1` produce `cyberrsecuritycheck.ps1` (ASCII puro, senza BOM, CRLF) + `.sha256`.
-- `tests/Test-CyberRSecurityCheck.ps1` 142 test, inclusa la simulazione `Get-Content | iex` del file unico.
+  In `.gitattributes` il file unico e' `-text`: git non converte i fine riga, quindi il file servito da
+  raw.githubusercontent.com ha la stessa impronta del `.sha256` (con `eol=crlf` GitHub lo serviva in LF).
+- `tests/Test-CyberRSecurityCheck.ps1` 143 test, inclusa la simulazione `Get-Content | iex` del file unico.
   Un test legge l'AST e blocca titoli/consigli di Add-Finding oltre 220 caratteri e il gergo inglese.
 
 ## Convenzioni
@@ -62,7 +64,7 @@ Richiesta esplicita di Rosario: il programma non deve mai segnalare cose inutili
 
 ## Stato e prossimi passi
 - Provato su Windows 11 reale (5 novembre 2026, PC di gioco con AtlasOS, senza Edge: la GUI usa Chrome --app):
-  test PASS con Windows PowerShell 5.1 e pwsh 7.6; analisi reale come amministratore da console e da GUI
+  test PASS con Windows PowerShell 5.1 e pwsh 7.6, analisi reale come amministratore da console e da GUI
   (HttpListener, runspace STA, test appunti, modulo memoria) senza errori; 0 CONFERMATI su PC pulito.
   `irm | iex` provato servendo il file da un server locale: riavvio come amministratore riuscito con i parametri.
 - Le righe "Errore fatale (Get-ItemProperty)" che compaiono in una trascrizione (Start-Transcript) sono errori
@@ -71,6 +73,7 @@ Richiesta esplicita di Rosario: il programma non deve mai segnalare cose inutili
   senza CONFERMATI. La cartella del repo, copiata dall'altro Windows, ha un altro proprietario (SID): git chiede
   `safe.directory`. Il push usa HTTPS con Git Credential Manager, come WinRUtil (`gh` non e' installato).
 - Nel lanciatore usare `return`, mai `break`: fuori da un ciclo `break` interrompe anche lo script chiamante (c'e' un test).
-- Creare il repository GitHub pubblico `rtecnocopy89/CyberRSecurityCheck`, push del branch `main`, tag `v2.0.0`.
+- Pubblicato su https://github.com/rtecnocopy89/CyberRSecurityCheck (branch `main`, tag `v2.0.0`).
+  Manca la release GitHub con l'impronta SHA256 nelle note (serve `gh` o il sito).
 - Idee future: verifica firma/hash del file unico prima dell'esecuzione, export PDF del rapporto,
   stessa estetica di WinRUtil se Rosario lo chiede.

@@ -357,6 +357,10 @@ if (Test-Path -LiteralPath $bundle) {
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($launcher, [ref]$lt, [ref]$le)
         @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.BreakStatementAst] }, $true)).Count -eq 0
     }
+    Assert 'File unico salvato byte per byte da git (impronta uguale su GitHub)' {
+        $ga = Join-Path (Split-Path $here -Parent) '.gitattributes'
+        (Test-Path -LiteralPath $ga) -and @(Get-Content -LiteralPath $ga | Where-Object { $_ -match '^cyberrsecuritycheck\.ps1\s+-text\s*$' }).Count -eq 1
+    }
     Assert 'File unico con sintassi valida' { $t = $null; $e = $null; [void][System.Management.Automation.Language.Parser]::ParseFile($bundle, [ref]$t, [ref]$e); $e.Count -eq 0 }
     Assert 'Impronta SHA256 pubblicata corretta' {
         $sf = "$bundle.sha256"

@@ -6,3 +6,5 @@
 *.html text eol=lf
 *.md text eol=lf
 cyberrsecuritycheck.ps1.sha256 text eol=lf
+# File servito con irm | iex: salvato byte per byte (CRLF), cosi' l'impronta SHA256 e' la stessa su GitHub
+cyberrsecuritycheck.ps1 -text
