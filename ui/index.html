@@ -156,32 +156,32 @@ details.tech .items{padding-bottom:14px}
     <!-- HOME -->
     <section class="view on" id="vHome" aria-labelledby="hHome">
       <div class="banner" id="admBanner">
-        <p>Lo strumento non e' in esecuzione come amministratore: alcuni controlli (eventi, memoria, altri utenti) saranno incompleti.</p>
+        <p>Avviato senza privilegi di amministratore: alcuni controlli non saranno eseguiti.</p>
         <button type="button" class="crs-btn sm" id="btnElevate">Riavvia come amministratore</button>
       </div>
       <div class="hero">
         <div>
           <h2 id="hHome">Verifica la sicurezza di questo PC</h2>
-          <p>Cerca le cause delle frodi sui bonifici (IBAN sostituito, credenziali rubate) e controlla la configurazione di sicurezza. Vengono segnalati come problemi solo gli indicatori certi.</p>
+          <p>Cerca i segni delle truffe sui bonifici (IBAN cambiato, password rubate) e controlla le impostazioni di sicurezza. Come problemi segnala solo cose certe.</p>
         </div>
       </div>
       <div class="actions">
         <article class="card action rec">
           <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8.6 8 9 4.6-.4 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></div>
           <h3>Analisi completa</h3>
-          <p>Browser ed estensioni, codice iniettato in memoria, programmi in avvio, controllo remoto, rete, proxy/DNS, configurazione e test degli appunti.</p>
+          <p>Browser ed estensioni, memoria, programmi all'avvio, controllo remoto, rete, impostazioni di sicurezza e test degli appunti.</p>
           <div class="row"><span class="dur">3-10 minuti</span><button type="button" class="crs-btn primary" data-mode="Completo">Avvia analisi</button></div>
         </article>
         <article class="card action">
           <div class="ico"><svg viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><path d="M8 13h8M8 17h5"/></svg></div>
           <h3>Test appunti</h3>
-          <p>Copia un IBAN di prova e verifica se un programma lo sostituisce (malware "clipper"). Ripristina poi il contenuto originale.</p>
+          <p>Copia un IBAN di prova e controlla che nessun programma lo cambi. Poi ripristina gli appunti.</p>
           <div class="row"><span class="dur">circa 30 secondi</span><button type="button" class="crs-btn" data-mode="ClipTest">Avvia test</button></div>
         </article>
         <article class="card action">
           <div class="ico"><svg viewBox="0 0 24 24"><path d="M2 12h4l3-8 4 16 3-8h6"/></svg></div>
           <h3>Monitor durante il bonifico</h3>
-          <p>Lascialo attivo mentre il cliente esegue il bonifico: registra modifiche agli appunti, nuovi programmi, proxy e file hosts.</p>
+          <p>Resta attivo mentre si fa il bonifico e avvisa subito se qualcosa cambia l'IBAN o il collegamento.</p>
           <div class="row">
             <label class="dur">Durata <select id="minutes" aria-label="Durata del monitor"><option value="10">10 min</option><option value="30" selected>30 min</option><option value="60">60 min</option></select></label>
             <button type="button" class="crs-btn" data-mode="Monitor">Avvia monitor</button>
@@ -194,8 +194,8 @@ details.tech .items{padding-bottom:14px}
       </div>
       <div class="trust">
         <div><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span><b>Sola lettura</b>Non cancella e non modifica nulla sul PC.</span></div>
-        <div><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span><b>Nessun dato inviato</b>Tutto resta sul PC (unico uso della rete: confronto DNS).</span></div>
-        <div><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span><b>Prove integre</b>Rapporto con impronte SHA256, valido da allegare alla denuncia.</span></div>
+        <div><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span><b>Nessun dato inviato</b>Il rapporto resta su questo PC.</span></div>
+        <div><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span><b>Prove integre</b>Rapporto con impronte SHA256, da allegare alla denuncia.</span></div>
       </div>
     </section>
 
@@ -239,7 +239,7 @@ details.tech .items{padding-bottom:14px}
       <div class="sec"><h3>Problemi confermati <span class="n" id="nA"></span></h3><div class="items" id="lA"></div></div>
       <div class="sec" id="secM"><h3>Da controllare <span class="n" id="nM"></span></h3><div class="items" id="lM"></div></div>
       <div class="sec" id="secC"><h3>Impostazioni di sicurezza da correggere <span class="n" id="nC"></span></h3><div class="items" id="lC"></div></div>
-      <details class="tech" id="secB"><summary>Dettagli tecnici e informazioni (<span id="nB">0</span>)</summary><div class="items" id="lB"></div></details>
+      <details class="tech" id="secB"><summary>Dettagli tecnici (<span id="nB">0</span>)</summary><div class="items" id="lB"></div></details>
 
       <div class="res-foot">
         <button type="button" class="crs-btn ghost" id="btnExit">Esci</button>
@@ -288,7 +288,7 @@ details.tech .items{padding-bottom:14px}
     mode = m; logIndex = 0; $('log').textContent = '';
     $('alertBanner').classList.remove('on');
     $('runTitle').textContent = m === 'Monitor' ? 'Monitor attivo' : (m === 'ClipTest' ? 'Test appunti in corso' : 'Analisi in corso');
-    $('runStep').textContent = m === 'Monitor' ? 'Ora fate eseguire il bonifico al cliente come al solito.' : 'Preparazione...';
+    $('runStep').textContent = m === 'Monitor' ? 'Ora eseguire il bonifico come al solito.' : 'Preparazione...';
     $('btnCancel').textContent = m === 'Monitor' ? 'Termina monitor' : 'Interrompi';
     $('btnCancel').disabled = false;
     setProgress(0, m !== 'Completo' && m !== 'Monitor');
@@ -376,7 +376,7 @@ details.tech .items{padding-bottom:14px}
       fill('lC', C, 'CRIT', 'DA CORREGGERE');
       $('secM').style.display = M.length ? '' : 'none';
       $('secC').style.display = C.length ? '' : 'none';
-      fill('lB', B, 'BASSA', 'INFO');
+      fill('lB', B, 'BASSA', 'DETTAGLIO');
       $('nB').textContent = B.length; $('secB').style.display = B.length ? '' : 'none';
       $('btnReport').disabled = !r.html;
       show('vRes');

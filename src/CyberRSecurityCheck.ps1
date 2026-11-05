@@ -523,8 +523,8 @@ function Invoke-Section {
     $nm = @($new | Where-Object { $_.Gravita -eq 'MEDIA' }).Count
     $tag = ('[{0,2}/{1}]' -f $script:StepNo, $script:StepTotal)
     if ($status -ne 'OK') { Write-Msg ("{0} {1}: non disponibile ({2})" -f $tag, $Name, $err) 'DarkYellow' }
-    elseif ($na) { Write-Msg ("{0} {1}: {2} problemi GRAVI, {3} da verificare" -f $tag, $Name, $na, $nm) 'Red' }
-    elseif ($nm) { Write-Msg ("{0} {1}: {2} elementi da verificare" -f $tag, $Name, $nm) 'Yellow' }
+    elseif ($na) { Write-Msg ("{0} {1}: {2} confermati, {3} da controllare" -f $tag, $Name, $na, $nm) 'Red' }
+    elseif ($nm) { Write-Msg ("{0} {1}: {2} da controllare" -f $tag, $Name, $nm) 'Yellow' }
     else { Write-Msg ("{0} {1}: OK ({2} elementi controllati, {3:N1} s)" -f $tag, $Name, $rows, $sw.Elapsed.TotalSeconds) 'Green' }
     $script:Sections.Add([pscustomobject]@{
             Sezione = $Name; Stato = $status; Righe = $rows; Secondi = [math]::Round($sw.Elapsed.TotalSeconds, 1); File = $file; Errore = $err
@@ -750,6 +750,13 @@ function Get-HardeningChecks {
             Add-HardeningRow $rows 'Sistema' 'Aggiornamenti Windows recenti' $st ("ultimo aggiornamento {0:dd/MM/yyyy} ({1} giorni fa)" -f $last, $days) 'Installare gli aggiornamenti: molti malware sfruttano falle gia'' corrette.'
         }
     } catch { }
+    try {
+        $wu = Get-CimInstance Win32_Service -Filter "Name='wuauserv'" -ErrorAction Stop
+        if ($wu) {
+            if ([string]$wu.StartMode -eq 'Disabled') { Add-HardeningRow $rows 'Sistema' 'Servizio Windows Update attivo' 'CRITICO' 'disattivato' 'Riattivare Windows Update: senza aggiornamenti il PC resta vulnerabile.' }
+            else { Add-HardeningRow $rows 'Sistema' 'Servizio Windows Update attivo' 'OK' ([string]$wu.StartMode) '' }
+        }
+    } catch { }
 
     # UAC
     $uk = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
@@ -791,7 +798,7 @@ function Get-HardeningChecks {
 
     # Credenziali
     $wd = Get-RegValue 'HKLM:\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest' 'UseLogonCredential'
-    if ($wd -eq 1) { Add-HardeningRow $rows 'Credenziali' 'WDigest disattivato (password non in chiaro in memoria)' 'CRITICO' 'UseLogonCredential = 1' 'Impostazione usata dagli attaccanti per leggere le password in chiaro: riportarla a 0 e cambiare le password.' 'MEDIA' }
+    if ($wd -eq 1) { Add-HardeningRow $rows 'Credenziali' 'WDigest disattivato (password non in chiaro in memoria)' 'CRITICO' 'UseLogonCredential = 1' 'Impostazione usata per rubare le password di Windows. Riportarla a 0 e cambiare le password.' 'MEDIA' }
     else { Add-HardeningRow $rows 'Credenziali' 'WDigest disattivato (password non in chiaro in memoria)' 'OK' 'disattivato' '' }
     $ppl = Get-RegValue 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa' 'RunAsPPL'
     if ($ppl -in 1, 2) { Add-HardeningRow $rows 'Credenziali' 'Protezione LSA (RunAsPPL)' 'OK' 'attiva' '' }
@@ -813,6 +820,10 @@ function Get-HardeningChecks {
             }
         } catch { }
     }
+    $dpk = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender'
+    if ((Get-DefenderPolicyState (Get-RegValue $dpk 'DisableAntiSpyware') (Get-RegValue "$dpk\Real-Time Protection" 'DisableRealtimeMonitoring')) -eq 'CRITICO') {
+        Add-HardeningRow $rows 'Antivirus' 'Defender non bloccato da criteri' 'CRITICO' 'disattivato tramite criteri di gruppo' 'Se non l''ha deciso l''IT, rimuovere il criterio e riattivare Defender.'
+    } else { Add-HardeningRow $rows 'Antivirus' 'Defender non bloccato da criteri' 'OK' 'nessun criterio di blocco' '' }
     # SmartScreen
     $ss = Get-RegValue 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer' 'SmartScreenEnabled'
     $ssPol = Get-RegValue 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System' 'EnableSmartScreen'
@@ -861,7 +872,7 @@ function Get-HardeningChecks {
                 $ld = Join-Path $prof 'Login Data'
                 if (Test-Path -LiteralPath $ld) {
                     $len = (Get-Item -LiteralPath $ld).Length
-                    if ($len -gt 40KB) { Add-HardeningRow $rows 'Credenziali' "Password salvate in $($b.Name) ($(Split-Path $ud -Leaf)/$(Split-Path $prof -Leaf))" 'ATTENZIONE' ("archivio password {0:N0} KB" -f ($len / 1KB)) 'Non salvare nel browser le credenziali della banca: un infostealer le copia in pochi secondi. Usare un gestore password dedicato.' }
+                    if ($len -gt 40KB) { Add-HardeningRow $rows 'Credenziali' "Password salvate in $($b.Name) ($(Split-Path $ud -Leaf)/$(Split-Path $prof -Leaf))" 'ATTENZIONE' ("archivio password {0:N0} KB" -f ($len / 1KB)) 'Non salvare nel browser la password della banca: un malware la copia in pochi secondi.' }
                 }
             }
         }
@@ -927,7 +938,7 @@ function Get-TypedCommands {
                 if ($sub -eq 'TypedPaths') { $src = 'Barra di Esplora file' }
                 $rows.Add([pscustomobject]@{ Utente = $h.Name; Origine = $src; Comando = $cmd; Rischio = $risk })
                 if ($risk) {
-                    Add-Finding $risk 'ClickFix' "Comando sospetto incollato in $src ($($h.Name))" $cmd 'Tecnica "ClickFix": un sito o una email (anche PEC) convince l''utente a incollare un comando che installa il malware. Chiedere all''utente quando e perche'' l''ha eseguito; analizzare cosa scarica.'
+                    Add-Finding $risk 'ClickFix' "Comando sospetto incollato in $src ($($h.Name))" $cmd 'Truffa "ClickFix": un sito o una email fa incollare un comando che installa un malware. Chiedere all''utente chi glielo ha fatto eseguire. Se nessuno lo riconosce, considerare il PC infetto.'
                 }
             }
         }
@@ -937,15 +948,31 @@ function Get-TypedCommands {
         if (-not (Test-Path -LiteralPath $hf)) { continue }
         if ($script:OutDir) { Copy-Item -LiteralPath $hf -Destination (Join-Path $script:OutDir ('cronologia_powershell_' + (Split-Path $ud -Leaf) + '.txt')) -ErrorAction SilentlyContinue }
         $n = 0
+        $hits = @()
         foreach ($line in @(Get-Content -LiteralPath $hf -ErrorAction SilentlyContinue)) {
             $n++
             $risk = Get-PsHistoryRisk $line
             if (-not $risk) { continue }
             $rows.Add([pscustomobject]@{ Utente = (Split-Path $ud -Leaf); Origine = "Cronologia PowerShell riga $n"; Comando = $line; Rischio = $risk })
-            Add-Finding $risk 'ClickFix' "Comando PowerShell sospetto nella cronologia di $(Split-Path $ud -Leaf)" $line 'Verificare se l''ha eseguito un tecnico. Se no, e'' un forte indizio di infezione (download ed esecuzione di codice).'
+            $hits += [pscustomobject]@{ Comando = $line; Rischio = $risk }
         }
+        Add-PsHistoryFindings (Split-Path $ud -Leaf) $hits
     }
     return $rows.ToArray()
+}
+
+function Add-PsHistoryFindings {
+    # Una sola riga per utente: i comandi sospetti della cronologia PowerShell vanno insieme
+    param([string]$User, [object[]]$Hits)
+    $cmds = @($Hits | ForEach-Object { ([string]$_.Comando).Trim() } | Where-Object { $_ } | Select-Object -Unique)
+    if ($cmds.Count -eq 0) { return }
+    $sev = 'MEDIA'
+    if (@($Hits | Where-Object { $_.Rischio -eq 'ALTA' }).Count -gt 0) { $sev = 'ALTA' }
+    $title = "Comando PowerShell sospetto nella cronologia di $User"
+    if ($cmds.Count -gt 1) { $title = "$($cmds.Count) comandi PowerShell sospetti nella cronologia di $User" }
+    $det = ($cmds | Select-Object -First 5) -join ' | '
+    if ($cmds.Count -gt 5) { $det += " | ... (elenco completo in comandi.csv)" }
+    Add-Finding $sev 'ClickFix' $title $det 'Questi comandi scaricano ed eseguono programmi. Se non li ha eseguiti un tecnico, considerare il PC infetto.'
 }
 
 function Get-KnownIocs {
@@ -964,7 +991,7 @@ function Get-KnownIocs {
         if (Test-Path -LiteralPath $p) {
             $h = Get-FileSha256 $p
             $rows.Add([pscustomobject]@{ Tipo = 'File noto'; Oggetto = $p; Dettaglio = "SHA256 $h" })
-            Add-Finding 'ALTA' 'Indicatori noti' "File tipico del trojan Ramnit: $p" "SHA256 $h" 'Ramnit e'' il malware usato nelle frodi drIBAN che sostituiscono l''IBAN nei bonifici. Isolare il PC e fare analisi approfondita.'
+            Add-Finding 'ALTA' 'Indicatori noti' "File del trojan bancario Ramnit: $p" "SHA256 $h" 'Ramnit sostituisce l''IBAN nei bonifici. Non usare il PC per la banca, scollegarlo dalla rete e farlo analizzare.'
         }
     }
     # File HTML infettati da Ramnit
@@ -988,13 +1015,49 @@ function Get-KnownIocs {
                 } finally { $fs.Dispose() }
                 if (Test-RamnitHtml $tail) {
                     $rows.Add([pscustomobject]@{ Tipo = 'HTML infetto'; Oggetto = $f.FullName; Dettaglio = 'VBScript Ramnit in coda al file' })
-                    Add-Finding 'ALTA' 'Indicatori noti' "File HTML infettato da Ramnit: $($f.Name)" $f.FullName 'Ramnit infetta i file .html: aprirli nel browser reinfetta il PC. Indica un''infezione Ramnit attiva o passata.'
+                    Add-Finding 'ALTA' 'Indicatori noti' "File HTML infettato da Ramnit: $($f.Name)" $f.FullName 'Segno di infezione Ramnit (attuale o passata). Non aprire il file e far analizzare il PC.'
                 }
             } catch { }
         }
     }
     $rows.Add([pscustomobject]@{ Tipo = 'Riepilogo'; Oggetto = 'File HTML controllati'; Dettaglio = [string][math]::Min($count, 3000) })
+    # Tasti di accessibilita' sostituiti da una shell (accesso senza password dalla schermata di blocco)
+    if ($env:windir) {
+        foreach ($b in @(Find-AccessibilityBackdoor -SysDir (Join-Path $env:windir 'System32'))) {
+            $rows.Add([pscustomobject]@{ Tipo = 'Accessibilita'' sostituita'; Oggetto = $b.File; Dettaglio = "identico a $($b.UgualeA)" })
+            Add-Finding 'ALTA' 'Indicatori noti' "Accesso nascosto dalla schermata di blocco: $([IO.Path]::GetFileName($b.File)) e' stato sostituito" "$($b.File) identico a $($b.UgualeA) | SHA256 $($b.Sha256)" 'Chiunque puo'' entrare nel PC senza password. Far analizzare il PC e cambiare le password.'
+        }
+    }
     return $rows.ToArray()
+}
+
+function Find-AccessibilityBackdoor {
+    # Un programma di accessibilita' (sethc, utilman...) identico a cmd/powershell/explorer/taskmgr: un PC pulito non lo produce mai
+    param([string]$SysDir, [string[]]$ShellPaths = @())
+    $hits = @()
+    if (-not $SysDir -or -not (Test-Path -LiteralPath $SysDir)) { return $hits }
+    if ($ShellPaths.Count -eq 0) {
+        $ShellPaths = @((Join-Path $SysDir 'cmd.exe'), (Join-Parts $SysDir @('WindowsPowerShell', 'v1.0', 'powershell.exe')), (Join-Path $SysDir 'taskmgr.exe'), (Join-Path (Split-Path $SysDir -Parent) 'explorer.exe'))
+    }
+    $shells = @{}
+    foreach ($s in $ShellPaths) {
+        if (Test-Path -LiteralPath $s -PathType Leaf) { $h = Get-FileSha256 $s; if ($h) { $shells[$h] = $s } }
+    }
+    if ($shells.Count -eq 0) { return $hits }
+    foreach ($n in @('sethc.exe', 'utilman.exe', 'osk.exe', 'Magnify.exe', 'Narrator.exe', 'DisplaySwitch.exe', 'AtBroker.exe')) {
+        $p = Join-Path $SysDir $n
+        if (-not (Test-Path -LiteralPath $p -PathType Leaf)) { continue }
+        $h = Get-FileSha256 $p
+        if ($h -and $shells.ContainsKey($h)) { $hits += [pscustomobject]@{ File = $p; UgualeA = $shells[$h]; Sha256 = $h } }
+    }
+    return $hits
+}
+
+function Get-DefenderPolicyState {
+    # 'CRITICO' se un criterio di gruppo disattiva Defender o la protezione in tempo reale
+    param($DisableAntiSpyware, $DisableRealtime)
+    if ($DisableAntiSpyware -eq 1 -or $DisableRealtime -eq 1) { return 'CRITICO' }
+    return 'OK'
 }
 
 function Get-MemoryInjection {
@@ -1019,7 +1082,9 @@ function Get-MemoryInjection {
             elseif ($key -contains $pn) { $sev = 'MEDIA' }
             if ($script:OwnPids -contains [int]$p.Id) { continue }
             $rows.Add([pscustomobject]@{ Processo = $p.ProcessName; PID = $p.Id; Percorso = $path; Indirizzo = ('0x{0:X}' -f $hh.Address); Dimensione = $hh.Size; Protezione = ('0x{0:X}' -f $hh.Protect); Tipo = $hh.Kind })
-            Add-Finding $sev 'Iniezione in memoria' "Codice eseguibile iniettato in $($p.ProcessName) (PID $($p.Id))" ("{0} all'indirizzo 0x{1:X} ({2:N0} byte). {3}" -f $hh.Kind, $hh.Address, $hh.Size, $path) "Tipico dei trojan bancari che modificano le pagine della banca dentro il browser (es. Ramnit/drIBAN). Alcuni software di protezione legittimi fanno lo stesso: se il processo e' un antivirus, verificare. Altrimenti NON usare il PC per bonifici, fare un dump della memoria (es. con WinPmem o procdump) e analisi forense."
+            $madv = "Tipico dei trojan bancari che alterano la pagina della banca. Non usare il PC per i bonifici e farlo analizzare da un tecnico."
+            if ($sev -ne 'ALTA') { $madv = "Alcuni antivirus fanno lo stesso. Se il programma non e' un antivirus, non usare il PC per i bonifici e farlo analizzare." }
+            Add-Finding $sev 'Iniezione in memoria' "Codice estraneo in memoria in $($p.ProcessName) (PID $($p.Id))" ("{0} all'indirizzo 0x{1:X} ({2:N0} byte). {3}" -f $hh.Kind, $hh.Address, $hh.Size, $path) $madv
         }
     }
     $rows.Add([pscustomobject]@{ Processo = '(riepilogo)'; PID = ''; Percorso = "processi analizzati: $scanned, non accessibili: $denied"; Indirizzo = ''; Dimensione = ''; Protezione = ''; Tipo = '' })
@@ -1046,7 +1111,7 @@ function Get-LanReport {
     }
     foreach ($an in (Get-ArpAnomalies $arp $gws)) {
         if ($an.Gateway) {
-            Add-Finding 'MEDIA' 'Rete locale' "Il MAC del router ($($an.MAC)) risulta usato anche da altri IP della rete" "IP con lo stesso MAC: $($an.IP)" 'Fatto certo, ma con due spiegazioni: un ripetitore Wi-Fi (normale) oppure un dispositivo che intercetta il traffico (ARP spoofing). Se il PC e'' collegato via cavo direttamente al router, e'' un attacco: verificare il MAC sull''etichetta del router.'
+            Add-Finding 'MEDIA' 'Rete locale' "Il MAC del router ($($an.MAC)) risulta usato anche da altri IP della rete" "IP con lo stesso MAC: $($an.IP)" 'Normale se in casa c''e'' un ripetitore Wi-Fi. Altrimenti un dispositivo sta intercettando il traffico: confrontare con il MAC scritto sull''etichetta del router.'
         } else {
             Add-Finding 'BASSA' 'Rete locale' "Piu' IP con lo stesso MAC ($($an.MAC))" $an.IP 'Spesso normale (dispositivo con piu'' indirizzi). Verificare se sconosciuto.'
         }
@@ -1193,7 +1258,7 @@ function Get-ChromiumExtensions {
                     if ($risk.Severity -in @('ALTA', 'MEDIA')) {
                         $stato = 'attiva'
                         if (-not $enabled) { $stato = 'disattivata' }
-                        Add-Finding $risk.Severity 'Estensioni browser' "$($b.Name): estensione '$name' ($stato)" ("Utente {0}, profilo {1}, ID {2}. {3}. Cartella: {4}" -f $row.Utente, $row.Profilo, $id, $risk.Reasons, $extDir) "Se non la riconoscete, rimuovetela e cercate l'ID su Google/VirusTotal. Le estensioni sono la causa piu' frequente di IBAN modificati nella pagina della banca. Se e' legittima, aggiungere l'ID in AllowExtensionIds di config.json." -Key $id -KeyType ext
+                        Add-Finding $risk.Severity 'Estensioni browser' "$($b.Name): estensione '$name' ($stato)" ("Utente {0}, profilo {1}, ID {2}. {3}. Cartella: {4}" -f $row.Utente, $row.Profilo, $id, $risk.Reasons, $extDir) "Le estensioni sono la causa piu' frequente di IBAN cambiati nella pagina della banca. Se nessuno la riconosce, rimuoverla. Se e' legittima, autorizzarla in config.json (AllowExtensionIds)." -Key $id -KeyType ext
                     }
                 }
             }
@@ -1260,7 +1325,7 @@ function Get-FirefoxExtensions {
                         Installata = $inst; Permessi = ($perms -join ' '); Host = ($origins -join ' ')
                         Sorgente = [string](Get-DVal $a 'sourceURI'); Rischio = $sev; Motivi = ($why -join '; ')
                     })
-                if ($sev -in @('ALTA', 'MEDIA')) { Add-Finding $sev 'Estensioni browser' "Firefox: estensione '$name'" ("Utente {0}, ID {1}. {2}" -f (Split-Path $ud -Leaf), (Get-DVal $a 'id'), ($why -join '; ')) 'Se non la riconoscete, rimuovetela.' -Key ([string](Get-DVal $a 'id')) -KeyType ext }
+                if ($sev -in @('ALTA', 'MEDIA')) { Add-Finding $sev 'Estensioni browser' "Firefox: estensione '$name'" ("Utente {0}, ID {1}. {2}" -f (Split-Path $ud -Leaf), (Get-DVal $a 'id'), ($why -join '; ')) 'Se nessuno la riconosce, rimuoverla.' -Key ([string](Get-DVal $a 'id')) -KeyType ext }
             }
         }
     }
@@ -1293,11 +1358,11 @@ function Get-BrowserPolicies {
         if ($kn -match 'ExtensionInstallForcelist') {
             $fsev = 'MEDIA'
             if (-not (Test-DomainJoined)) { $fsev = 'ALTA' }
-            Add-Finding $fsev 'Policy browser' 'Estensione installata FORZATAMENTE tramite policy' "$kn = $d" "Le policy forzano l'estensione e impediscono di rimuoverla. Se non e' una policy aziendale nota, e' un forte indizio di malware."
+            Add-Finding $fsev 'Policy browser' 'Estensione imposta tramite criteri (non si puo'' rimuovere)' "$kn = $d" "Se non l'ha impostata l'IT aziendale, e' un forte segnale di malware: far analizzare il PC."
         } elseif ($kn -match '\\Extensions(\\|$)' -and $kn -notmatch 'Policies') {
             Add-Finding 'BASSA' 'Policy browser' 'Estensione registrata da un programma esterno (registro)' "$kn $($row.Valore) = $d" "Verificare quale programma l'ha registrata."
         } elseif ($row.Valore -match '^(ProxyServer|ProxyPacUrl|ProxyMode|ProxySettings)$') {
-            Add-Finding 'MEDIA' 'Policy browser' 'Proxy imposto al browser tramite policy' "$kn $($row.Valore) = $d" 'Tutto il traffico del browser passa da quel proxy: verificare che sia quello aziendale.'
+            Add-Finding 'MEDIA' 'Policy browser' 'Proxy imposto al browser tramite criteri' "$kn $($row.Valore) = $d" 'Tutto il traffico del browser passa da quel proxy. Verificare che sia quello aziendale.'
         } elseif ($row.Valore -match '^(CommandLineFlagSecurityWarningsEnabled|DeveloperToolsAvailability|ExtensionInstallSources|ExtensionInstallAllowlist|ExtensionSettings|RemoteDebuggingAllowed|Certificates|ImportEnterpriseRoots)$' -or $kn -match 'ExtensionInstallSources|ExtensionSettings|Certificates') {
             Add-Finding 'BASSA' 'Policy browser' "Policy browser sensibile: $($row.Valore)" "$kn = $d" 'Verificare che sia stata impostata dall''IT.'
         }
@@ -1325,10 +1390,10 @@ function Get-BrowserShortcuts {
             if (-not $isBrowser) { continue }
             $rows.Add([pscustomobject]@{ Collegamento = $f.FullName; Destinazione = $t; Argomenti = $a; Modificato = $f.LastWriteTime })
             if ($a -match '(?i)--load-extension|--remote-debugging|--proxy-server|--proxy-pac-url|--disable-web-security|--host-resolver-rules|--headless|--disable-extensions-except') {
-                Add-Finding 'ALTA' 'Browser' "Collegamento del browser con parametri sospetti: $($f.Name)" "$($f.FullName) -> $t $a" "Malware bancari modificano i collegamenti per caricare estensioni nascoste o un proxy. Ricreare il collegamento e cercare la cartella indicata."
+                Add-Finding 'ALTA' 'Browser' "Collegamento del browser modificato: $($f.Name)" "$($f.FullName) -> $t $a" "Il collegamento carica un'estensione nascosta o un proxy. Ricrearlo e far analizzare il PC."
             }
             if ($t -and ($script:BrowserExe -contains ([IO.Path]::GetFileName($t).ToLowerInvariant())) -and (Test-Path -LiteralPath $t) -and (Get-SigInfo $t).Status -ne 'Valid') {
-                Add-Finding 'ALTA' 'Browser' "Il collegamento '$($f.Name)' avvia un browser senza firma valida" "$t" 'L''eseguibile del browser avviato dal collegamento NON ha una firma digitale valida: browser falso o manomesso.'
+                Add-Finding 'ALTA' 'Browser' "Il collegamento '$($f.Name)' avvia un browser non originale" "$t" 'Il browser non ha una firma digitale valida. Reinstallarlo dal sito ufficiale e far analizzare il PC.'
             }
         }
     }
@@ -1350,7 +1415,7 @@ function Get-BrowserBinaries {
         $s = Get-SigInfo $c
         $rows.Add([pscustomobject]@{ File = $c; Firma = $s.Status; Firmatario = $s.Signer; Versione = (Get-Item -LiteralPath $c).VersionInfo.ProductVersion; SHA256 = (Get-FileSha256 $c) })
         if ($s.Status -in @('HashMismatch', 'NotSigned')) {
-            Add-Finding 'ALTA' 'Browser' "Eseguibile del browser con firma non valida: $c" "Stato firma: $($s.Status)" 'Reinstallare il browser da sito ufficiale e analizzare il file.'
+            Add-Finding 'ALTA' 'Browser' "Browser non originale (firma non valida): $c" "Stato firma: $($s.Status)" 'Reinstallare il browser dal sito ufficiale e far analizzare il PC.'
         }
     }
     return $rows.ToArray()
@@ -1378,16 +1443,16 @@ function Get-ProcessReport {
         $nm = ([string]$p.Name).ToLowerInvariant()
         $isOwnUi = ($script:OwnPids -contains [int]$p.ProcessId) -or ($cmd -match 'CyberRSecUI_')
         if (-not $isOwnUi -and $script:BrowserExe -contains $nm -and $cmd -match '(?i)--load-extension|--remote-debugging-port|--remote-debugging-address|--remote-allow-origins|-remote-debugging-port|--window-position=-\\d{3,}|-start-debugger-server') {
-            Add-Finding 'ALTA' 'Processi' "Browser avviato con parametri sospetti ($($p.Name) PID $($p.ProcessId))" $cmd "--load-extension carica un'estensione nascosta; --remote-debugging-port, --headless o una finestra fuori schermo (--window-position=-2400) sono usati dagli infostealer (es. Phemedrone, Lumma, StealC) per rubare cookie e sessioni della banca. Padre: $parent"
+            Add-Finding 'ALTA' 'Processi' "Browser avviato con opzioni usate dai malware ($($p.Name) PID $($p.ProcessId))" $cmd "Queste opzioni servono a rubare i dati di accesso alla banca dal browser. Avviato da: $parent. Non usare il PC per la banca e farlo analizzare."
         }
         if (-not $isOwnUi -and $script:BrowserExe -contains $nm -and $cmd -match '(?i)--proxy-server|--proxy-pac-url|--disable-web-security|--host-resolver-rules|--headless') {
-            Add-Finding 'MEDIA' 'Processi' "Browser in esecuzione con proxy/opzioni di sicurezza modificate ($($p.Name) PID $($p.ProcessId))" $cmd "Verificare quale programma ha avviato il browser in questo modo. Padre: $parent"
+            Add-Finding 'MEDIA' 'Processi' "Browser avviato con proxy o protezioni disattivate ($($p.Name) PID $($p.ProcessId))" $cmd "Verificare il programma che l'ha avviato: $parent."
         }
         if ($risk -eq 'ALTA') {
-            Add-Finding 'MEDIA' 'Processi' "Programma senza firma digitale in esecuzione da una cartella utente: $($p.Name) (PID $($p.ProcessId))" "$path | firma: $($sig.Status) | padre: $parent | SHA256: $(Get-FileSha256 $path)" 'Cercare lo SHA256 su VirusTotal. Se sconosciuto, raccogliere il file prima di cancellarlo.' -Key $path -KeyType path
+            Add-Finding 'MEDIA' 'Processi' "Programma senza firma in esecuzione da una cartella utente: $($p.Name) (PID $($p.ProcessId))" "$path | firma: $($sig.Status) | padre: $parent | SHA256: $(Get-FileSha256 $path)" 'Cercare lo SHA256 su virustotal.com. Non cancellare il file prima di averlo fatto analizzare.' -Key $path -KeyType path
         }
         if ($script:BrowserExe -contains $nm -and $cmd -match '(?i)--profile-directory=' -and $parent -and $parent -notmatch '(?i)^(explorer|chrome|msedge|brave|opera|vivaldi|launcher|browser_broker|sihost|runtimebroker|svchost|chrome_proxy|msedge_proxy|elevation_service|setup|outlook|teams|ms-teams|olk|winword|excel)\.exe$') {
-            Add-Finding 'BASSA' 'Processi' "Browser avviato da un programma insolito: $parent -> $($p.Name)" $cmd 'Gli infostealer riavviano il browser con il profilo dell''utente per rubarne i dati. Verificare il programma padre.'
+            Add-Finding 'BASSA' 'Processi' "Browser avviato da un programma insolito: $parent -> $($p.Name)" $cmd 'Alcuni malware riavviano il browser per rubarne i dati. Verificare il programma che l''ha avviato.'
         }
         if ($nm -in @('powershell.exe', 'pwsh.exe', 'wscript.exe', 'cscript.exe', 'mshta.exe') -and $cmd -match $script:ScriptHostRegex -and $p.ProcessId -ne $PID -and $cmd -notmatch '(?i)CyberRSecurityCheck') {
             $psev = 'BASSA'
@@ -1395,7 +1460,7 @@ function Get-ProcessReport {
             Add-Finding $psev 'Processi' "Script in esecuzione con parametri sospetti: $($p.Name) PID $($p.ProcessId)" $cmd 'Verificare cosa esegue e chi lo ha avviato.'
         }
         if ($script:BrowserExe -contains $nm -and $path -and $sig.Status -in @('NotSigned', 'HashMismatch')) {
-            Add-Finding 'ALTA' 'Processi' "Browser in esecuzione senza firma digitale valida: $path" "PID $($p.ProcessId) firma $($sig.Status)" 'Un vero Chrome/Edge/Firefox e'' sempre firmato: questo e'' un browser falso o manomesso.'
+            Add-Finding 'ALTA' 'Processi' "Browser non originale in esecuzione: $path" "PID $($p.ProcessId) firma $($sig.Status)" 'Un browser originale e'' sempre firmato. Non usare il PC per la banca e reinstallare il browser dal sito ufficiale.'
         }
     }
     return $rows.ToArray()
@@ -1419,7 +1484,7 @@ function Get-BrowserModules {
                 $sev = 'BASSA'
                 if ((Get-PathRisk $f) -eq 1) { $sev = 'MEDIA' }
                 if ((Get-PathRisk $f) -eq 2 -or $sig.Status -eq 'HashMismatch') { $sev = 'ALTA' }
-                Add-Finding $sev 'Iniezione nel browser' "DLL non firmata caricata in $($p.ProcessName): $([IO.Path]::GetFileName($f))" "$f | firma $($sig.Status) | SHA256 $(Get-FileSha256 $f)" "Una DLL estranea dentro il browser puo' modificare le pagine della banca (man-in-the-browser). Verificare su VirusTotal." -Key $f -KeyType path
+                Add-Finding $sev 'Iniezione nel browser' "Componente senza firma caricato in $($p.ProcessName): $([IO.Path]::GetFileName($f))" "$f | firma $($sig.Status) | SHA256 $(Get-FileSha256 $f)" "Un componente estraneo nel browser puo' modificare la pagina della banca. Cercare lo SHA256 su virustotal.com." -Key $f -KeyType path
             }
         }
     }
@@ -1443,7 +1508,7 @@ function Add-AutorunRow {
     if ($risk) {
         $t = "$Type senza firma digitale da cartella utente: $Name"
         if ($risk -eq 'ALTA') { $t = "$Type che scarica o esegue codice nascosto: $Name" }
-        Add-Finding $risk 'Avvio automatico' $t "$Location | $Command | firma $($sig.Status)" 'Verificare il file (SHA256 su VirusTotal). Se malevolo: isolare il PC, salvare le prove, poi rimuovere. Se legittimo, aggiungere la cartella in AllowPaths di config.json.' -Key $exe -KeyType path
+        Add-Finding $risk 'Avvio automatico' $t "$Location | $Command | firma $($sig.Status)" 'Cercare lo SHA256 su virustotal.com. Se e'' legittimo, autorizzare la cartella in config.json (AllowPaths).' -Key $exe -KeyType path
     }
 }
 
@@ -1524,7 +1589,7 @@ function Get-Autoruns {
                 $note = "Stato: $($t.State); Autore: $($t.Author)"
                 Add-AutorunRow $rows 'Operazione pianificata' $t.TaskPath $t.TaskName $cmd $note
                 if ($isMs -and (Get-PathRisk $exePath) -eq 2 -and (Get-SigInfo $exePath).Status -ne 'Valid') {
-                    Add-Finding 'ALTA' 'Avvio automatico' "Operazione pianificata camuffata da Microsoft: $($t.TaskPath)$($t.TaskName)" $cmd 'Le attivita'' Microsoft non eseguono file da AppData/Temp.'
+                    Add-Finding 'ALTA' 'Avvio automatico' "Attivita' pianificata finta Microsoft: $($t.TaskPath)$($t.TaskName)" $cmd 'Le attivita'' Microsoft non avviano file da AppData o Temp. Far analizzare il PC.'
                 }
             }
         }
@@ -1547,7 +1612,7 @@ function Get-Autoruns {
             if ($cls -in @('CommandLineEventConsumer', 'ActiveScriptEventConsumer') -and $c.Name -notmatch '^(SCM Event Log Consumer|BVTConsumer)$') {
                 $wsev = 'MEDIA'
                 if ($cls -eq 'ActiveScriptEventConsumer' -or $cmd -match '(?i)powershell|mshta|wscript|cscript|cmd(\.exe)?\s*/c|https?:') { $wsev = 'ALTA' }
-                Add-Finding $wsev 'Avvio automatico' "Persistenza WMI: $($c.Name) ($cls)" $cmd 'Tecnica fileless usata da malware avanzati: analizzare e rimuovere.'
+                Add-Finding $wsev 'Avvio automatico' "Persistenza WMI: $($c.Name) ($cls)" $cmd 'Tecnica usata da malware avanzati per riavviarsi da soli. Far analizzare il PC.'
             }
         }
     } catch { }
@@ -1595,6 +1660,19 @@ function Get-RemoteAccess {
     return $rows.ToArray()
 }
 
+function Get-RemoteToolName {
+    # Nomi diversi dello stesso programma (eseguibile, servizio, nome commerciale) -> un solo nome
+    param([string]$Match)
+    $m = ([string]$Match).ToLowerInvariant().Trim()
+    $alias = [ordered]@{
+        'remoting_host' = 'chrome remote desktop'; 'client32.exe' = 'netsupport'; 'tvnserver' = 'tightvnc'; 'winvnc' = 'ultravnc'
+        'rutserv' = 'remoteutilities'; 'rfusclient' = 'remoteutilities'; 'dwagent' = 'dwservice'; 'getgo' = 'gotoassist'
+        'zohoassist' = 'zoho assist'; 'connectwise' = 'screenconnect'; 'beyondtrust' = 'bomgar'
+    }
+    foreach ($k in $alias.Keys) { if ($m -eq $k) { return $alias[$k] } }
+    return $m
+}
+
 function Add-RemoteToolFindings {
     # Una sola segnalazione per programma: processo, servizio e voce installata dello stesso strumento vanno insieme
     param([object[]]$Rows)
@@ -1602,6 +1680,7 @@ function Add-RemoteToolFindings {
     foreach ($r in @($Rows | Where-Object { $_.Tipo -ne 'Log connessioni' -and $_.Tipo -ne 'RDP' })) {
         $tool = [regex]::Match(("{0} {1}" -f $r.Nome, $r.Dettaglio), $script:RemoteToolRegex).Value.ToLowerInvariant()
         if (-not $tool) { $tool = ([string]$r.Nome).ToLowerInvariant() }
+        $tool = Get-RemoteToolName $tool
         if (-not $tools.Contains($tool)) { $tools[$tool] = New-Object 'System.Collections.Generic.List[object]' }
         $tools[$tool].Add($r)
     }
@@ -1621,7 +1700,7 @@ function Add-RemoteToolFindings {
             }
         }
         $key = ((@($items | Select-Object -ExpandProperty Nome -Unique) + $tool) -join ' | ')
-        Add-Finding 'MEDIA' 'Accesso remoto' "Programma di controllo remoto presente sul PC: $display" ("Trovato come: {0}. Vedi accesso_remoto.csv e i log copiati nel report." -f ($parts -join '; ')) "Verificare che sia autorizzato e chi si collega. Con il controllo remoto un truffatore puo' modificare il bonifico mentre il cliente lavora. Controllare nei log le connessioni in ingresso nelle date dei bonifici fraudolenti. Se e' lo strumento del vostro tecnico, aggiungerlo in AllowRemoteTools di config.json." -Key $key -KeyType remote
+        Add-Finding 'MEDIA' 'Accesso remoto' "Programma di controllo remoto presente sul PC: $display" ("Trovato come: {0}. Vedi accesso_remoto.csv e i log copiati nel report." -f ($parts -join '; ')) "Con il controllo remoto un truffatore puo' modificare il bonifico. Verificare che sia autorizzato. Se e' del vostro tecnico, autorizzarlo in config.json (AllowRemoteTools)." -Key $key -KeyType remote
     }
 }
 
@@ -1635,10 +1714,10 @@ function Get-NetworkReport {
         if ($p) { $pn = $p.Name; $pp = $p.ExecutablePath }
         $rows.Add([pscustomobject]@{ Stato = [string]$c.State; Locale = "$($c.LocalAddress):$($c.LocalPort)"; Remoto = "$($c.RemoteAddress):$($c.RemotePort)"; PID = $c.OwningProcess; Processo = $pn; Percorso = $pp })
         if ($c.State -eq 'Established' -and $c.RemoteAddress -in @('127.0.0.1', '::1') -and $c.RemotePort -in @(9222, 9229) -and $script:BrowserExe -notcontains ([string]$pn).ToLowerInvariant()) {
-            Add-Finding 'ALTA' 'Rete' "Il programma $pn e' collegato alla porta di debug del browser ($($c.RemotePort))" "$pp PID $($c.OwningProcess)" 'Tecnica degli infostealer per leggere cookie e pagine della banca dal browser. Analizzare subito il programma.' -Key $pp -KeyType path
+            Add-Finding 'ALTA' 'Rete' "Il programma $pn controlla il browser dall'esterno (porta $($c.RemotePort))" "$pp PID $($c.OwningProcess)" 'Tecnica dei malware che rubano i dati della banca dal browser. Non usare il PC per la banca e farlo analizzare.' -Key $pp -KeyType path
         }
         if ($c.State -eq 'Listen' -and $script:BrowserExe -contains ([string]$pn).ToLowerInvariant() -and $c.LocalPort -ge 9222 -and $c.LocalPort -le 9230 -and $script:OwnPids -notcontains [int]$c.OwningProcess) {
-            Add-Finding 'ALTA' 'Rete' "Il browser $pn e' in ascolto sulla porta $($c.LocalPort)" "PID $($c.OwningProcess)" 'Tipico del debug remoto (--remote-debugging-port): un altro programma puo'' leggere e modificare le pagine.'
+            Add-Finding 'ALTA' 'Rete' "Il browser $pn e' controllabile da un altro programma (porta $($c.LocalPort))" "PID $($c.OwningProcess)" 'Un altro programma puo'' leggere e modificare le pagine. Chiudere il browser e far analizzare il PC.'
         }
     }
     return $rows.ToArray()
@@ -1651,7 +1730,7 @@ function Get-ProxyHostsDns {
     $hp = Join-Parts $env:SystemRoot @('System32', 'drivers', 'etc', 'hosts')
     foreach ($e in (Get-HostsEntries $hp $BankDomains)) {
         $rows.Add([pscustomobject]@{ Tipo = 'hosts'; Nome = $e.Host; Valore = $e.IP; Note = "riga $($e.Riga)" })
-        if ($e.Banca) { Add-Finding 'ALTA' 'Rete/DNS' "File hosts reindirizza il dominio della banca: $($e.Host) -> $($e.IP)" $hp 'Il PC viene mandato su un sito falso. Pulire il file hosts e cercare il malware che lo ha modificato.' }
+        if ($e.Banca) { Add-Finding 'ALTA' 'Rete/DNS' "Il file hosts dirotta il sito della banca: $($e.Host) -> $($e.IP)" $hp 'Il PC viene mandato su un sito falso. Non accedere alla banca da questo PC e farlo analizzare.' }
         elseif (-not $e.Localhost) { Add-Finding 'BASSA' 'Rete/DNS' "Voce personalizzata nel file hosts: $($e.Host) -> $($e.IP)" $hp 'Verificare che sia voluta.' }
     }
     if ($script:OutDir -and (Test-Path -LiteralPath $hp)) { Copy-Item -LiteralPath $hp -Destination (Join-Path $script:OutDir 'hosts.txt') -ErrorAction SilentlyContinue }
@@ -1663,13 +1742,13 @@ function Get-ProxyHostsDns {
         if ($is.ProxyEnable -eq 1 -and $is.ProxyServer) {
             $sev = 'MEDIA'
             if ($is.ProxyServer -match '(?i)127\.0\.0\.1|localhost|\[::1\]') { $sev = 'MEDIA'; $script:LocalProxyActive = $true }
-            Add-Finding $sev 'Rete/Proxy' "Proxy di sistema attivo per $($h.Name): $($is.ProxyServer)" $k 'Un proxy locale (127.0.0.1) intercetta e puo'' modificare il traffico verso la banca. Verificare quale programma ascolta su quella porta (connessioni.csv).'
+            Add-Finding $sev 'Rete/Proxy' "Proxy di sistema attivo per $($h.Name): $($is.ProxyServer)" $k 'Un proxy puo'' leggere e modificare il traffico verso la banca. Verificare che sia autorizzato (programma in ascolto: vedi connessioni.csv).'
         }
         if ($is.AutoConfigURL) {
             $pacSev = 'MEDIA'
             $pacHost = ([regex]::Match([string]$is.AutoConfigURL, '^[a-z]+://([^/:]+)', 'IgnoreCase')).Groups[1].Value
             if ($is.AutoConfigURL -match '(?i)^file:|127\.0\.0\.1|localhost' -or ($pacHost -match '^\d+\.\d+\.\d+\.\d+$' -and -not (Test-PrivateIp $pacHost))) { $pacSev = 'ALTA' }
-            Add-Finding $pacSev 'Rete/Proxy' "Script PAC (configurazione proxy automatica) per $($h.Name)" $is.AutoConfigURL 'Tecnica usata dai trojan bancari per dirottare solo i siti delle banche. Scaricare e leggere il file PAC.'
+            Add-Finding $pacSev 'Rete/Proxy' "Configurazione proxy automatica (PAC) per $($h.Name)" $is.AutoConfigURL 'Usata dai trojan bancari per dirottare solo i siti delle banche. Verificare che l''indirizzo sia aziendale.'
         }
     }
     # WinHTTP
@@ -1705,7 +1784,7 @@ function Get-ProxyHostsDns {
                 $rows.Add([pscustomobject]@{ Tipo = 'Risoluzione DNS'; Nome = $q; Valore = "PC: $($loc -join ', ') | pubblici: $($pub -join ', ')"; Note = '' })
                 $privLoc = @($loc | Where-Object { Test-PrivateIp $_ })
                 if ($privLoc.Count -gt 0 -and @($pub | Where-Object { Test-PrivateIp $_ }).Count -eq 0) {
-                    Add-Finding 'ALTA' 'Rete/DNS' "Il dominio della banca $q viene risolto verso un indirizzo della rete locale" "PC: $($loc -join ', ') / DNS pubblici: $($pub -join ', ')" 'Dirottamento DNS certo (router, DNS aziendale o PC manomesso): il browser viene mandato su un server diverso da quello della banca. Verificare i DNS del router e del PC.'
+                    Add-Finding 'ALTA' 'Rete/DNS' "Il sito della banca $q porta a un indirizzo della rete locale" "PC: $($loc -join ', ') / DNS pubblici: $($pub -join ', ')" 'Il browser viene mandato su un server diverso da quello della banca. Controllare i DNS del router e del PC.'
                 } elseif ($pub.Count -gt 0 -and $common.Count -eq 0) {
                     Add-Finding 'BASSA' 'Rete/DNS' "Il dominio $q risolve su IP diversi rispetto ai DNS pubblici" "PC: $($loc -join ', ') / pubblici: $($pub -join ', ')" 'Puo'' essere normale (CDN), ma se gli IP del PC non appartengono alla banca c''e'' un dirottamento DNS (router o PC). Verificare il proprietario degli IP (whois).'
                 }
@@ -1739,7 +1818,7 @@ function Get-RootCertificates {
         if ($txt -match $mitmRegex) {
             $msev = 'MEDIA'
             if ($script:LocalProxyActive) { $msev = 'ALTA' }
-            Add-Finding $msev 'Certificati' "Certificato radice di uno strumento di intercettazione HTTPS: $($r.Soggetto)" "$($r.Archivio) $($r.Thumbprint)" -Key $r.Thumbprint -KeyType cert -Advice "Permette di leggere e modificare il traffico HTTPS verso la banca. Rimuoverlo se nessuno lo ha installato volutamente."
+            Add-Finding $msev 'Certificati' "Certificato di intercettazione HTTPS installato: $($r.Soggetto)" "$($r.Archivio) $($r.Thumbprint)" -Key $r.Thumbprint -KeyType cert -Advice "Permette di leggere e modificare il traffico verso la banca. Rimuoverlo se nessuno l'ha installato volutamente."
         } elseif ($txt -match $avRegex) {
             Add-Finding 'BASSA' 'Certificati' "Certificato radice dell'antivirus/firewall (ispezione HTTPS): $($r.Soggetto)" "$($r.Archivio)" 'Normale se l''antivirus fa scansione HTTPS.'
         } elseif ($r.Archivio -eq 'Cert:\CurrentUser\Root' -and -not $lmThumbs.ContainsKey($r.Thumbprint)) {
@@ -1808,7 +1887,7 @@ function Get-DefenderReport {
                 $sev = 'BASSA'
                 if ((Get-PathRisk ([string]$v + '\')) -eq 2 -or $v -match '(?i)\\Users\\?$|^\.?(exe|dll|ps1|js|vbs)$') { $sev = 'MEDIA' }
                 if ($v -match '^(?i)[a-z]:\\?$|^(?i)[a-z]:\\Users\\?$' -or ($pair[0] -eq 'ExclusionExtension' -and $v -match '^(?i)\.?(exe|dll)$')) { $sev = 'ALTA' }
-                Add-Finding $sev 'Antivirus' "Esclusione antivirus: $($pair[0]) = $v" '' 'I malware aggiungono esclusioni per non essere rilevati. Rimuovere quelle non volute.'
+                Add-Finding $sev 'Antivirus' "Esclusione antivirus: $($pair[0]) = $v" '' 'I malware aggiungono esclusioni per non farsi trovare. Rimuovere quelle non volute.'
             }
         }
     } catch { }
@@ -1821,7 +1900,7 @@ function Get-DefenderReport {
             $rows.Add([pscustomobject]@{ Tipo = 'Rilevamento'; Nome = $nm; Valore = $res; Data = $d.InitialDetectionTime })
             $dsev = 'ALTA'
             try { if ([datetime]$d.InitialDetectionTime -lt (Get-Date).AddDays(-90)) { $dsev = 'MEDIA' } } catch { }
-            Add-Finding $dsev 'Antivirus' "Defender ha rilevato: $nm" "$($d.InitialDetectionTime) - $res" 'Anche se risulta rimosso, potrebbe aver lasciato altri componenti. Verificare la data rispetto ai bonifici fraudolenti.'
+            Add-Finding $dsev 'Antivirus' "Defender ha rilevato: $nm" "$($d.InitialDetectionTime) - $res" 'Anche se rimosso, possono restare altri componenti. Confrontare la data con quella dei bonifici contestati.'
         }
     } catch { }
     return $rows.ToArray()
@@ -1880,13 +1959,13 @@ function Get-SecurityEvents {
                 elseif ($r -eq 'ALTA') { $ssev = 'MEDIA' }
                 if ($ssev) { Add-Finding $ssev 'Eventi' "Servizio sospetto installato il $($e.TimeCreated): $($d['ServiceName'])" $d['ImagePath'] 'Verificare il programma.' }
             }
-            if ($e.Id -eq 1102) { Add-Finding 'MEDIA' 'Eventi' "Registro di sicurezza cancellato il $($e.TimeCreated)" "Utente: $who" 'Fatto certo: qualcuno ha cancellato il registro degli accessi. Verificare chi e perche''.' }
+            if ($e.Id -eq 1102) { Add-Finding 'MEDIA' 'Eventi' "Registro di sicurezza cancellato il $($e.TimeCreated)" "Utente: $who" 'Qualcuno ha cancellato il registro degli accessi al PC. Verificare chi e perche''.' }
             if ($e.Id -eq 4720) { Add-Finding 'BASSA' 'Eventi' "Creato utente locale il $($e.TimeCreated): $($d['TargetUserName'])" "da $($d['SubjectUserName'])" 'Verificare che sia stato creato volutamente.' }
         }
     }
     if ($rdpCount -gt 0) { Add-Finding 'BASSA' 'Accesso remoto' "$rdpCount accessi RDP negli ultimi $Days giorni" 'Vedi eventi.csv (utente e IP di provenienza)' 'Confrontare date e ore con quelle dei bonifici fraudolenti.' }
-    foreach ($ip in $rdpExt.Keys) { Add-Finding 'ALTA' 'Accesso remoto' "Accesso al PC con Desktop remoto da Internet (IP pubblico $ip)" "$($rdpExt[$ip]) accessi riusciti negli ultimi $Days giorni - dettagli in eventi.csv" 'Qualcuno da Internet ha effettuato l''accesso al PC. Se non e'' un accesso autorizzato (VPN/tecnico), il PC e'' controllato da remoto: cambiare subito le password e chiudere RDP verso Internet.' }
-    foreach ($ip in $failed.Keys) { if ($failed[$ip] -ge 20) { $fs = 'BASSA'; if (-not (Test-PrivateIp $ip)) { $fs = 'MEDIA' }; Add-Finding $fs 'Eventi' "$($failed[$ip]) tentativi di accesso falliti da $ip" '' 'Tentativi di indovinare la password: se l''IP e'' pubblico il PC e'' raggiungibile da Internet.' } }
+    foreach ($ip in $rdpExt.Keys) { Add-Finding 'ALTA' 'Accesso remoto' "Accesso al PC da Internet con Desktop remoto (IP $ip)" "$($rdpExt[$ip]) accessi riusciti negli ultimi $Days giorni - dettagli in eventi.csv" 'Se non e'' un accesso autorizzato, qualcuno controlla il PC da remoto: cambiare subito le password e chiudere il Desktop remoto.' }
+    foreach ($ip in $failed.Keys) { if ($failed[$ip] -ge 20) { $fs = 'BASSA'; if (-not (Test-PrivateIp $ip)) { $fs = 'MEDIA' }; Add-Finding $fs 'Eventi' "$($failed[$ip]) tentativi di accesso falliti da $ip" '' 'Qualcuno prova a indovinare la password. Se l''IP e'' pubblico, il PC e'' raggiungibile da Internet.' } }
     return $rows.ToArray()
 }
 
@@ -2056,14 +2135,14 @@ function Invoke-ClipboardTest {
         } elseif ($swapped) {
             $hit = $true
             Write-Msg "  !!! APPUNTI MODIFICATI: '$t' -> '$now'  processo: $ownTxt" 'Red'
-            Add-Finding 'ALTA' 'Clipper' 'CLIPPER RILEVATO: un programma sostituisce l''IBAN negli appunti' "Scritto: $t | Diventato: $now | dopo $([math]::Round($sw.Elapsed.TotalSeconds,1)) s | Processo che ha scritto negli appunti: $ownTxt" 'Il PC e'' infetto. Isolarlo dalla rete, non fare bonifici, salvare le prove (questo report + il file del processo indicato) e consegnarle con la denuncia.'
+            Add-Finding 'ALTA' 'Clipper' 'Un programma sostituisce l''IBAN copiato negli appunti' "Scritto: $t | Diventato: $now | dopo $([math]::Round($sw.Elapsed.TotalSeconds,1)) s | Processo che ha scritto negli appunti: $ownTxt" 'Il PC e'' infetto. Scollegarlo dalla rete, non fare bonifici e conservare il rapporto come prova per la denuncia.'
         } else {
             Write-Msg "  OK nessuna modifica: $t" 'Green'
         }
     }
     if ($null -ne $orig) { try { if ($orig -eq '') { Set-Clipboard -Value ' ' } else { Set-Clipboard -Value $orig } } catch { } }
     if (-not $hit) {
-        Add-Finding 'BASSA' 'Clipper' 'Test clipboard negativo (nessuna sostituzione in 8 secondi)' '' 'Se l''IBAN cambia comunque sul sito, la modifica avviene dentro il browser (estensione/iniezione) e non negli appunti. Usare la modalita'' Monitor durante il bonifico.'
+        Add-Finding 'BASSA' 'Clipper' 'Test appunti superato (nessuna sostituzione in 8 secondi)' '' 'Se l''IBAN cambia comunque sul sito, la modifica avviene dentro il browser. Usare il Monitor durante il bonifico.'
     }
     if ($script:OutDir) { $rows | Export-Csv -LiteralPath (Join-Path $script:OutDir 'test_clipboard.csv') -NoTypeInformation -Delimiter ';' -Encoding $script:CsvEnc }
     $script:Sections.Add([pscustomobject]@{ Sezione = 'Test clipboard'; Stato = 'OK'; Righe = $rows.Count; Secondi = 0; File = 'test_clipboard.csv'; Errore = '' })
@@ -2150,7 +2229,7 @@ function Invoke-Monitor {
                 if ($sev -eq 'ALTA') {
                     $alerts++
                     try { [console]::Beep(1200, 400); [console]::Beep(800, 400) } catch { }
-                    Add-Finding 'ALTA' 'Monitor' $ev "$det | processo appunti: $ownerTxt $($owner.Percorso)" 'Salvare il file del processo indicato e il log; isolare il PC.'
+                    Add-Finding 'ALTA' 'Monitor' $ev "$det | processo appunti: $ownerTxt $($owner.Percorso)" 'Non confermare il bonifico. Scollegare il PC dalla rete e conservare il rapporto.'
                 }
                 $lastText = $txt; $lastIbans = $ibans; $lastTime = Get-Date
             }
@@ -2168,7 +2247,7 @@ function Invoke-Monitor {
                     if ($script:BrowserExe -contains ([string]$p.Name).ToLowerInvariant() -and $cmd -match '(?i)--load-extension|--remote-debugging|--proxy-server|--headless|--window-position=-') { $sev = 'ALTA' }
                     if ($cmd.Length -gt 300) { $cmd = $cmd.Substring(0, 300) + '...' }
                     & $write 'Nuovo processo' $sev $cmd $p.Name $path ''
-                    if ($sev -eq 'ALTA') { $alerts++; Add-Finding 'ALTA' 'Monitor' "Durante il monitor e' stato avviato un browser con debug remoto o estensione nascosta: $($p.Name)" "$path $cmd" 'Analizzare chi lo ha avviato.' }
+                    if ($sev -eq 'ALTA') { $alerts++; Add-Finding 'ALTA' 'Monitor' "Durante il monitor e' stato avviato un browser con debug remoto o estensione nascosta: $($p.Name)" "$path $cmd" 'Non confermare il bonifico e far analizzare il PC.' }
                     elseif ($sev -eq 'MEDIA' -and $r -eq 'ALTA') { Add-Finding 'MEDIA' 'Monitor' "Durante il monitor e' stato avviato un programma senza firma da cartella utente: $($p.Name)" "$path $cmd" 'Verificare il file.' }
                 }
                 $hh = Get-FileSha256 $hp
@@ -2187,7 +2266,7 @@ function Invoke-Monitor {
         Write-Msg ''
         Write-Msg "Monitor terminato. Allarmi: $alerts. Log: $log" 'Cyan'
         if ($alerts -eq 0) {
-            Add-Finding 'BASSA' 'Monitor' 'Nessuna anomalia rilevata durante il monitor' 'Appunti, processi, hosts e proxy non hanno mostrato modifiche sospette.' "Se l'IBAN e' cambiato lo stesso nella pagina, la modifica avviene dentro il browser: controllare la sezione Estensioni e Iniezione nel browser, e provare il bonifico da un altro browser/profilo pulito."
+            Add-Finding 'BASSA' 'Monitor' 'Nessuna anomalia rilevata durante il monitor' 'Appunti, processi, hosts e proxy non hanno mostrato modifiche sospette.' "Se l'IBAN e' cambiato lo stesso, la modifica avviene dentro il browser: controllare le estensioni e provare da un altro browser."
         }
         $script:Sections.Add([pscustomobject]@{ Sezione = 'Monitor'; Stato = 'OK'; Righe = $alerts; Secondi = 0; File = 'monitor_log.csv'; Errore = '' })
     }
@@ -2206,19 +2285,19 @@ function Get-RunSummary {
     $hA = @($script:Hardening | Where-Object { $_.Stato -eq 'ATTENZIONE' }).Count
     $hO = @($script:Hardening | Where-Object { $_.Stato -eq 'OK' }).Count
     $sc = Get-SecurityScore -Alta $nA -Media $nM -Critici $hC -Attenzione $hA
-    $msg = 'Nessun indizio di compromissione trovato con i controlli eseguiti.'
-    if ($nA -gt 0) { $msg = "$nA problemi CONFERMATI: considerare il PC compromesso. Non fare bonifici da questo PC." }
-    elseif ($nM -gt 0) { $msg = "Nessun problema confermato. $nM elementi da controllare (fatti certi che possono avere una spiegazione legittima)." }
-    elseif ($hC -gt 0) { $msg = "Nessun indizio di compromissione, ma $hC impostazioni di sicurezza da correggere." }
+    $msg = 'Nessun segno di attacco trovato.'
+    if ($nA -gt 0) { $msg = "$nA problemi confermati: il PC e' compromesso. Non usarlo per la banca." }
+    elseif ($nM -gt 0) { $msg = "Nessun problema confermato. $nM elementi da controllare." }
+    elseif ($hC -gt 0) { $msg = "Nessun segno di attacco. $hC impostazioni di sicurezza da correggere." }
     $secTot = $script:Sections.Count
     $secOk = @($script:Sections.ToArray() | Where-Object { $_.Stato -eq 'OK' }).Count
     $giud = $sc.Giudizio
     $incompleta = ($secTot -ge 5 -and $secOk -lt [math]::Ceiling($secTot * 0.8))
     if ($incompleta) {
         if ($nA -eq 0) { $giud = 'Analisi incompleta' }
-        $why = 'rilanciare come amministratore'
+        $why = 'riavviare come amministratore'
         if ($script:IsAdmin) { $why = 'vedere "Controlli eseguiti" nel rapporto' }
-        $msg += " Attenzione: $($secTot - $secOk) controlli su $secTot non sono stati eseguiti ($why), quindi il risultato non e' completo."
+        $msg += " Analisi incompleta: $($secTot - $secOk) controlli su $secTot non eseguiti ($why)."
     }
     return [pscustomobject]@{ Alta = $nA; Media = $nM; Bassa = $nB; Critici = $hC; Attenzione = $hA; ControlliOk = $hO; Punteggio = $sc.Punteggio; Giudizio = $giud; Messaggio = $msg; Incompleta = $incompleta; SezioniOk = $secOk; SezioniTotali = $secTot }
 }
@@ -2315,12 +2394,11 @@ td.det{font-family:Consolas,"Cascadia Mono",monospace;font-size:12px;color:var(-
 </tbody></table></div>
 <h2>Come leggere il rapporto</h2>
 <div class="card guide"><ul>
-<li><b>CONFERMATO</b>: indicatore certo di compromissione o manomissione. Non fare bonifici da questo PC, scollegarlo dalla rete, <b>non cancellare nulla</b> e conservare lo ZIP del rapporto (con SHA256SUMS.txt) come prova per la denuncia.</li>
-<li><b>DA CONTROLLARE</b>: fatto certo ma con possibili spiegazioni legittime (es. il programma di assistenza del tecnico, un gestore password) ma potrebbe modificare la pagina della banca. Gli elementi verificati si segnano in <i>config.json</i> e non daranno pi&ugrave; allarme.</li>
-<li>Se l'IBAN cambia <b>solo nella pagina della banca</b>, oltre una certa cifra, la causa tipica &egrave; un trojan man-in-the-browser (es. Ramnit con il kit drIBAN) o un'estensione del browser: guardare le aree <i>Iniezione in memoria</i>, <i>Iniezione nel browser</i>, <i>Estensioni browser</i>, <i>Indicatori noti</i>.</li>
-<li>Chiedere alla banca IP, dispositivo e orario dell'operazione fraudolenta e confrontarli con eventi.csv, accesso_remoto.csv e cronologia_esecuzione.csv.</li>
-<li>Gli SHA256 nei file CSV si cercano su virustotal.com senza caricare i file.</li>
-<li>Nessuno strumento trova tutto: se il rapporto &egrave; pulito ma il problema continua, servono una scansione offline (Microsoft Defender Offline) e un'analisi forense della memoria.</li>
+<li><b>CONFERMATO</b>: segno certo di attacco. Non usare il PC per la banca, scollegarlo dalla rete e <b>non cancellare nulla</b>: lo ZIP del rapporto vale come prova.</li>
+<li><b>DA CONTROLLARE</b>: fatto certo che pu&ograve; avere una spiegazione legittima (es. il programma di assistenza del tecnico). Gli elementi verificati si autorizzano in <i>config.json</i>.</li>
+<li>Se l'IBAN cambia solo nella pagina della banca, guardare <i>Estensioni browser</i>, <i>Iniezione in memoria</i> e <i>Indicatori noti</i>.</li>
+<li>Chiedere alla banca data, ora e IP dell'operazione contestata e confrontarli con eventi.csv e accesso_remoto.csv.</li>
+<li>Se il rapporto &egrave; pulito ma il problema continua, eseguire Microsoft Defender Offline e far analizzare il PC.</li>
 </ul></div>
 <footer>Generato da CyberRSecurityCheck v$($script:Version). Analisi in sola lettura. Impronte dei file in SHA256SUMS.txt.</footer>
 </main>
@@ -2403,7 +2481,7 @@ function Invoke-CyberHistory {
     $base = Split-Path $script:OutDir -Parent
     $prevDir = Find-PreviousSnapshot $base $script:OutDir
     if (-not $prevDir) {
-        Add-Finding 'BASSA' 'Storico' 'Prima analisi salvata per questo PC' "Cartella: $base" 'Le prossime analisi eseguite nella stessa cartella mostreranno automaticamente cosa e'' cambiato (nuove estensioni, programmi in avvio automatico, certificati, accessi remoti).'
+        Add-Finding 'BASSA' 'Storico' 'Prima analisi salvata per questo PC' "Cartella: $base" 'Dalla prossima analisi il rapporto mostrera'' cosa e'' cambiato.'
         return @()
     }
     $prev = Read-JsonFile (Join-Path $prevDir 'snapshot.json')
@@ -2415,7 +2493,7 @@ function Invoke-CyberHistory {
     foreach ($d in ($nuovi | Select-Object -First 40)) {
         $nsev = 'BASSA'
         if ($d.Categoria -in @('Estensioni', 'AccessoRemoto', 'ProxyHosts')) { $nsev = 'MEDIA' }
-        Add-Finding $nsev 'Novita' "NUOVO dall'analisi del $($when): $($d.Categoria)" $d.Elemento 'Elemento comparso dopo l''ultimo controllo: verificare chi lo ha aggiunto e quando.'
+        Add-Finding $nsev 'Novita' "NUOVO dall'analisi del $($when): $($d.Categoria)" $d.Elemento 'Comparso dopo l''ultimo controllo: verificare chi l''ha aggiunto.'
     }
     if ($nuovi.Count -gt 40) { Add-Finding 'BASSA' 'Novita' "Altri $($nuovi.Count - 40) elementi nuovi" 'Vedi confronto_precedente.csv' '' }
     if ($sw.Count -gt 0) { Add-Finding 'BASSA' 'Novita' "$($sw.Count) programmi nuovi dall'analisi del $when" (($sw | ForEach-Object { $_.Elemento.Split('|')[0] }) -join '; ') 'Verificare che siano voluti.' }
@@ -2471,7 +2549,7 @@ function Get-CollectPlan {
     $plan.Add(@('Avvio automatico e persistenza', 'avvio_automatico', { Get-Autoruns -UserDirs $ud }))
     $plan.Add(@('Cronologia di esecuzione programmi', 'cronologia_esecuzione', { Get-ExecutionHistory }))
     $plan.Add(@('Comandi incollati (ClickFix) e PowerShell', 'comandi', { Get-TypedCommands -UserDirs $ud }))
-    $plan.Add(@('Indicatori noti (Ramnit/drIBAN)', 'indicatori', { Get-KnownIocs -UserDirs $ud }))
+    $plan.Add(@('Indicatori noti (Ramnit, accessi nascosti)', 'indicatori', { Get-KnownIocs -UserDirs $ud }))
     $plan.Add(@('Controllo remoto', 'accesso_remoto', { Get-RemoteAccess }))
     $plan.Add(@('Connessioni di rete', 'connessioni', { Get-NetworkReport }))
     $plan.Add(@('Proxy, hosts e DNS', 'proxy_hosts_dns', { Get-ProxyHostsDns -BankDomains $BankDomains }))
@@ -2548,13 +2626,13 @@ function Show-FinalScreen {
     Write-Msg ''
     if ($Summary.Alta -gt 0) {
         Write-Msg '  COSA FARE ORA:' 'Red'
-        Write-Msg '   1. Non fare bonifici da questo PC finche'' i problemi confermati non sono risolti.' 'Red'
-        Write-Msg '   2. Non cancellare nulla: conservare lo ZIP del rapporto (vale come prova).' 'Red'
-        Write-Msg '   3. Scollegare il PC dalla rete, cambiare le password da un dispositivo pulito, avvisare la banca.' 'Red'
+        Write-Msg '   1. Non usare questo PC per la banca.' 'Red'
+        Write-Msg '   2. Non cancellare nulla: conservare lo ZIP del rapporto come prova.' 'Red'
+        Write-Msg '   3. Scollegare il PC da Internet, cambiare le password da un altro dispositivo e avvisare la banca.' 'Red'
     } elseif ($Summary.Media -gt 0) {
-        Write-Msg '  COSA FARE ORA: controllare i punti "da controllare" nel rapporto. Quelli legittimi si segnano in config.json.' 'Yellow'
+        Write-Msg '  COSA FARE: verificare i punti "Da controllare". Quelli legittimi si autorizzano in config.json.' 'Yellow'
     } else {
-        Write-Msg '  Se l''IBAN cambia ancora, usare la modalita'' Monitor durante il bonifico.' 'Green'
+        Write-Msg '  Se l''IBAN cambia ancora, usare il Monitor durante il bonifico.' 'Green'
     }
     Write-Msg ''
     Write-Msg "  Rapporto: $Html" 'Gray'

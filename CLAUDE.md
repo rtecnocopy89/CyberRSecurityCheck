@@ -40,7 +40,8 @@ Richiesta esplicita di Rosario: il programma non deve mai segnalare cose inutili
   da Rosario, opzioni B e C). Niente risorse esterne, niente commenti di attribuzione nel codice.
 - `config/config.json` BankDomains, RecentDays, DnsCompare, Allow* (elementi autorizzati -> BASSA).
 - `Compile.ps1` produce `cyberrsecuritycheck.ps1` (ASCII puro, senza BOM, CRLF) + `.sha256`.
-- `tests/Test-CyberRSecurityCheck.ps1` 107 test, inclusa la simulazione `Get-Content | iex` del file unico.
+- `tests/Test-CyberRSecurityCheck.ps1` 142 test, inclusa la simulazione `Get-Content | iex` del file unico.
+  Un test legge l'AST e blocca titoli/consigli di Add-Finding oltre 220 caratteri e il gergo inglese.
 
 ## Convenzioni
 - Compatibilita': Windows PowerShell 5.1 e PowerShell 7. Niente `??`, `?.`, ternario, `-Parallel`.
@@ -49,7 +50,8 @@ Richiesta esplicita di Rosario: il programma non deve mai segnalare cose inutili
   assegnazioni da' "Argument types do not match": usare `.ToArray()` o `.Count`.
 - `$ud` nei blocchi di Get-CollectPlan e' risolto per scope dinamico da Invoke-Collect (l'avviso
   PSUseDeclaredVarsMoreThanAssignments e' un falso positivo).
-- Messaggi all'utente in italiano, chiari, con "cosa fare".
+- Messaggi all'utente in italiano, per clienti non tecnici: brevi, un fatto + un'azione ("cosa fare"),
+  niente gergo (infostealer, fileless...). I dettagli tecnici vanno nel campo Dettaglio. Righe simili si raggruppano.
 - Lo strumento e' in sola lettura: nessuna modifica al sistema (il test appunti ripristina il contenuto).
 
 ## Flusso di lavoro
@@ -65,6 +67,9 @@ Richiesta esplicita di Rosario: il programma non deve mai segnalare cose inutili
   `irm | iex` provato servendo il file da un server locale: riavvio come amministratore riuscito con i parametri.
 - Le righe "Errore fatale (Get-ItemProperty)" che compaiono in una trascrizione (Start-Transcript) sono errori
   gia' gestiti dai try/catch: PowerShell li registra comunque nella trascrizione, ma non compaiono in console.
+- Provato anche sul Windows 11 principale (DESKROS, 5 novembre 2026): 142 test PASS su 5.1 e 7.6, analisi reale
+  senza CONFERMATI. La cartella del repo, copiata dall'altro Windows, ha un altro proprietario (SID): git chiede
+  `safe.directory`. Il push usa HTTPS con Git Credential Manager, come WinRUtil (`gh` non e' installato).
 - Nel lanciatore usare `return`, mai `break`: fuori da un ciclo `break` interrompe anche lo script chiamante (c'e' un test).
 - Creare il repository GitHub pubblico `rtecnocopy89/CyberRSecurityCheck`, push del branch `main`, tag `v2.0.0`.
 - Idee future: verifica firma/hash del file unico prima dell'esecuzione, export PDF del rapporto,
